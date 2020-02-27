@@ -7,6 +7,8 @@
 #include "disk.h"
 #include "fs.h"
 
+#define UNUSED(x) (void)(x)
+
 typedef struct __attribute__((__packed__)) {
 	int8_t signature[2];
 	int16_t totalBlocks;
@@ -91,73 +93,68 @@ int fs_info(void)
 
 int fs_create(const char *filename)
 {
-	filename = NULL;
-	const char* newptr = filename;
+	/* TODO: Phase 2 */
+	UNUSED(filename);
 	return 0;
 }
 
 int fs_delete(const char *filename)
 {
 	/* TODO: Phase 2 */
-	filename = NULL;
-	const char* newptr = filename;
+	UNUSED(filename);
 	return 0;
 }
 
 int fs_ls(void)
 {
 	/* TODO: Phase 2 */
-	filename = NULL;
-	const char* newptr = filename;
 	return 0;
 }
 
 int fs_open(const char *filename)
 {
 	/* TODO: Phase 3 */
-
-	filename = NULL;
-	const char* newptr = filename;
+	UNUSED(filename);
 	return 0;
 }
 
 int fs_close(int fd)
 {
 	/* TODO: Phase 3 */
-	fd++;
+	UNUSED(fd);
 	return 0;
 }
 
 int fs_stat(int fd)
 {
 	/* TODO: Phase 3 */
-	fd++;
+	UNUSED(fd);
 	return 0;
 }
 
 int fs_lseek(int fd, size_t offset)
 {
 	/* TODO: Phase 3 */
-	fd++;
-	offset++;
+	UNUSED(fd);
+	UNUSED(offset);
 	return 0;
 }
 
 int fs_write(int fd, void *buf, size_t count)
 {
 	/* TODO: Phase 4 */
-	fd++;
-	buf = NULL;
-	count++;
+	UNUSED(fd);
+	UNUSED(buf);
+	UNUSED(count);
 	return 0;
 }
 
 int fs_read(int fd, void *buf, size_t count)
 {
 	/* TODO: Phase 4 */
-	fd++;
-	buf = NULL;
-	count++;
+	UNUSED(fd);
+	UNUSED(buf);
+	UNUSED(count);
 	return 0;
 }
 
