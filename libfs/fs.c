@@ -19,11 +19,15 @@ typedef struct __attribute__((__packed__)) {
 
 typedef int16_t* FAT;
 
-typedef struct __attribute__((__packed__)) {
+typedef struct __attribute__((__packed__)){
 	int8_t filename[16];
 	int32_t fileSize;
 	int16_t firstDataBlockIndex;
 	int8_t padding[10];
+}rootDirEntry;
+
+typedef struct __attribute__((__packed__)) {
+	rootDirEntry rootDirEntries[128];
 } rootDirectory;
 
 typedef struct{
@@ -63,7 +67,24 @@ int fs_umount(void)
 
 int fs_info(void)
 {
-	/* TODO: Phase 1 */
+	printf("total_blk_count=%d\n", FS->totalBlocks);
+	printf("fat_blk_count=%d\n", FS->numFATBlocks);
+	printf("rdir_blk=%d\n", FS->rootDirBlockIndex);
+	printf("data_blk=%d\n", FS->dataBlockStartIndex);
+	printf("data_blk_count%d\n", FS->numDataBlocks);
+	int i;
+	for(i = 0; i<FS->superblock.numFATBlocks*4096; i++){
+		if(FS->FAT[i] > 0){
+			i++;
+		}
+	}
+	printf("fat_free_ratio=%d/%d\n", i, FS->superblock->numFATBlocks*4096);
+	for(i = 0; i<128; i++){
+		if(FS->(char)rootDir.rootDirEntries[i].filename[0] != '\0'){
+			i++;
+		}
+	}
+	printf("rdir_free_ratio=%d/%d\n", i, 128)
 }
 
 int fs_create(const char *filename)
