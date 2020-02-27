@@ -48,7 +48,7 @@ int fs_mount(const char *diskname)
 	block_read(0, &FS->superblock);
 	char desiredSig[] = "ECS150FS";
 	const void* sig = FS->superblock.signature;
-	if(memcmp(desiredSig, sig, 2) != 0){
+	if(memcmp(desiredSig, sig, 8) != 0){
 		return -1;
 	}
 	FS->FAT = malloc(FS->superblock.numFATBlocks*4096);
