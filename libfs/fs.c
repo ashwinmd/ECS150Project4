@@ -7,11 +7,45 @@
 #include "disk.h"
 #include "fs.h"
 
-/* TODO: Phase 1 */
+typedef struct __attribute__((__packed__)) {
+	int8_t signature[2];
+	int16_t totalBlocks;
+	int16_t rootDirBlockIndex;
+	int16_t dataBlockStartIndex;
+	int16_t numDataBlocks;
+	int8_t numFATBlocks;
+	int8_t padding[4079];
+} superblock;
+
+typedef int16_t* FAT;
+
+typedef struct __attribute__((__packed__)) {
+	int8_t filename[16];
+	int32_t fileSize;
+	int16_t firstDataBlockIndex;
+	int8_t padding[10];
+} rootDirectory;
+
+typedef struct{
+	superblock superblock;
+	FAT FAT;
+	rootDirectory rootDir;
+} ECS150FS;
+
+
+ECS150FS FS;
 
 int fs_mount(const char *diskname)
 {
-	/* TODO: Phase 1 */
+	if(block_disk_open(diskname) == 0){
+		if(block_read(0, &FS.superblock) == 0){
+			char* sig = (char*)FS.superblock.signature;
+			if(sig != "ECS150FS"){
+				return -1;
+			}
+		}
+	}
+
 }
 
 int fs_umount(void)
