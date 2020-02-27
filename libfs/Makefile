@@ -5,6 +5,10 @@ objs := disk.o fs.o
 CC := gcc
 CFLAGS := -Wall -Wextra -Werror -c -o
 
+ifeq ($(D),1)
+CFLAGS	+= -g
+endif
+
 all: $(lib)
 
 deps := $(patsubst %.o,%.d,$(objs))
