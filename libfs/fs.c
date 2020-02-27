@@ -33,24 +33,32 @@ typedef struct{
 } ECS150FS;
 
 
-ECS150FS FS;
+ECS150FS* FS = NULL;
 
 int fs_mount(const char *diskname)
 {
-	if(block_disk_open(diskname) == 0){
-		if(block_read(0, &FS.superblock) == 0){
-			char* sig = (char*)FS.superblock.signature;
-			if(sig != "ECS150FS"){
-				return -1;
-			}
-		}
+	block_disk_open(diskname);
+	FS = malloc(sizeof(ECS150FS));
+	block_read(0, &FS->superblock);
+	char* sig = (char*)FS->superblock.signature;
+	if(sig != "ECS150FS"){
+		return -1;
 	}
-
+	FS.FAT = (int16_t*)malloc(FS->superblock.numFATBlocks*4096);
+	for(int i = 1; i<=FS->superblock.numFATBlocks; i++){
+		block_read(i, &FS->FAT[(i-1)*4096]);
+	}
+	block_read(FS->superblock.rootDirBlockIndex, &FS->rootDir);
 }
 
 int fs_umount(void)
 {
-	/* TODO: Phase 1 */
+	if(FS == NULL){
+		return -1;
+	}
+	free(FS->FAT);
+	return block_disk_close();
+
 }
 
 int fs_info(void)
