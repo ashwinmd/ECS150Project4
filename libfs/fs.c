@@ -103,8 +103,24 @@ int fs_info(void)
 
 int fs_create(const char *filename)
 {
-  /* TODO: Phase 2 */
-  UNUSED(filename);
+  //Check error conditions
+  size_t filename_len = sizeof(filename);
+  if(filename == NULL || filename[filename_len-1] != '\0' || filename_len > FS_FILENAME_LEN){
+  	return -1;
+  }
+  for(int i = 0; i<128; i++){
+  	if(memcmp(FS->rootDir.rootDirEntries[i].filename, filename, filename_len) != 0){
+  		return -1;
+  	}
+  }
+
+  //Create a new empty file
+  
+
+
+
+
+  
   return 0;
 }
 
