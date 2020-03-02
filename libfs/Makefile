@@ -3,11 +3,13 @@ lib := libfs.a
 
 objs := disk.o fs.o
 CC := gcc
-CFLAGS := -Wall -Wextra -Werror -c -o
+CFLAGS := -Wall -Wextra -Werror
 
 ifeq ($(D),1)
 CFLAGS	+= -g
 endif
+
+CFLAGS += -c -o
 
 all: $(lib)
 

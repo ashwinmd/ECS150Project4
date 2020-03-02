@@ -12,6 +12,8 @@
 
 #define UNUSED(x) (void)(x)
 
+#define FAT_EOC 0xFFFF
+
 typedef struct __attribute__((__packed__)){
     uint8_t signature[8];
     uint16_t totalBlocks;
@@ -39,6 +41,7 @@ typedef struct{
     superblock superblock;
     FAT FAT;
     rootDirectory rootDir;
+    int numRootDirEntries;
 } ECS150FS;
 
 
@@ -63,6 +66,7 @@ int fs_mount(const char *diskname)
     block_read(i + 1, (void*) FS->FAT + 2048 * i);
   }
   block_read(FS->superblock.rootDirBlockIndex, &FS->rootDir);
+  FS->numRootDirEntries = 0;
   return 0;
 }
 
@@ -115,25 +119,66 @@ int fs_create(const char *filename)
   }
 
   //Create a new empty file
-  
-
-
-
-
-  
+  rootDirEntry r = FS->rootDir.rootDirEntries[FS->numRootDirEntries];
+  for(size_t i = 0; i<filename_len; i++){
+  	r.filename[i] = (uint8_t)filename[i];
+  }
+  r.fileSize = 0;
+  r.firstDataBlockIndex = FAT_EOC;
+  FS->rootDir.rootDirEntries[FS->numRootDirEntries] = r;
+  FS->numRootDirEntries++;
   return 0;
 }
 
 int fs_delete(const char *filename)
 {
-  /* TODO: Phase 2 */
-  UNUSED(filename);
+  //Removing a file is the opposite procedure: the file’s entry must be emptied and all the data blocks containing the file’s contents must be freed in the FAT.
+
+  //Check error conditions
+  size_t filename_len = sizeof(filename);
+  if(filename == NULL || filename[filename_len-1] != '\0' || filename_len > FS_FILENAME_LEN){
+  	return -1;
+  }
+  int fileIndex = -1;
+  for(int i = 0; i<128; i++){
+  	if(memcmp(FS->rootDir.rootDirEntries[i].filename, filename, filename_len) == 0){
+  		fileIndex = i;
+  	}
+  }
+  if (fileIndex == -1){
+  	return -1;
+  }
+
+  //CHECK IF FILE IS OPEN
+
+  //Free the file's entries in the FAT
+  size_t FAT_index = FS->rootDir.rootDirEntries[fileIndex].firstDataBlockIndex;
+  while(FAT_index != FAT_EOC){
+  	size_t new_FAT_index = FS->FAT[FAT_index];
+  	FS->FAT[FAT_index] = 0;
+  	FAT_index = new_FAT_index;
+  }
+
+  //Free the root directory entry
+  FS->rootDir.rootDirEntries[fileIndex].filename[0] = '\0';
+  FS->rootDir.rootDirEntries[fileIndex].fileSize = 0;
+  FS->rootDir.rootDirEntries[fileIndex].firstDataBlockIndex = FAT_EOC;
+  FS->numRootDirEntries--;
+
   return 0;
 }
 
 int fs_ls(void)
 {
-  /* TODO: Phase 2 */
+  //Check if underlying virtual disk open
+  if(block_disk_count() == -1){
+  	return -1;
+  }  
+  //file: Makefile, size: 1362, data_blk: 1
+  for(int i = 0; i<128; i++){
+  	rootDirEntry r = FS->rootDir.rootDirEntries[i];
+  	printf("file: %s, size: %d, data_blk: %d\n", r.filename, r.fileSize, r.firstDataBlockIndex);
+  }
   return 0;
 }
 
