@@ -34,7 +34,7 @@ typedef struct __attribute__((__packed__)){
 }rootDirEntry;
 
 typedef struct __attribute__((__packed__)) {
-    rootDirEntry rootDirEntries[128];
+    rootDirEntry rootDirEntries[FS_FILE_MAX_COUNT];
 } rootDirectory;
 
 typedef struct{
@@ -42,6 +42,15 @@ typedef struct{
     FAT FAT;
     rootDirectory rootDir;
 } ECS150FS;
+
+typedef struct{
+	uint8_t filename[FS_FILENAME_LEN];
+	size_t offset;
+} fileDescriptor;
+
+fileDescriptor fileDescriptorTable[FS_OPEN_MAX_COUNT];
+int numFiles;
+int numOpenFiles;
 
 
 ECS150FS* FS;
@@ -64,6 +73,11 @@ int fs_mount(const char *diskname)
     block_read(i + 1, FS->FAT + (BLOCK_SIZE/2) * i);
   }
   block_read(FS->superblock.rootDirBlockIndex, &FS->rootDir);
+  for(int i = 0; i<FS_OPEN_MAX_COUNT; i++){
+  	fileDescriptorTable[i].filename[0] = '\0';
+  }
+  numFiles = 0;
+  numOpenFiles = 0;
   return 0;
 }
 
@@ -94,12 +108,12 @@ int fs_info(void)
   }
   printf("fat_free_ratio=%d/%d\n", fat_free, FS->superblock.numDataBlocks);
   int rdir_free = 0;
-  for(int i = 0; i<128; i++){
+  for(int i = 0; i<FS_FILE_MAX_COUNT; i++){
     if((char)FS->rootDir.rootDirEntries[i].filename[0] == '\0'){
       rdir_free++;
     }
   }
-  printf("rdir_free_ratio=%d/%d\n", rdir_free, 128);
+  printf("rdir_free_ratio=%d/%d\n", rdir_free, FS_FILE_MAX_COUNT);
   return 0;
 }
 
@@ -107,17 +121,17 @@ int fs_create(const char *filename)
 {
   //Check error conditions
   size_t filename_len = strlen(filename);
-  if(filename == NULL || filename[filename_len] != '\0' || filename_len > FS_FILENAME_LEN){
+  if(filename == NULL || filename[filename_len] != '\0' || filename_len > FS_FILENAME_LEN || numFiles > FS_FILE_MAX_COUNT){
   	return -1;
   }
-  for(int i = 0; i<128; i++){
+  for(int i = 0; i<FS_FILE_MAX_COUNT; i++){
   	if(memcmp(FS->rootDir.rootDirEntries[i].filename, filename, filename_len) == 0){
   		return -1;
   	}
   }
   //Find a place in the root directory to add the file
   int availableIndex = -1;
-  for(int i = 0; i<128; i++){
+  for(int i = 0; i<FS_FILE_MAX_COUNT; i++){
   	if(FS->rootDir.rootDirEntries[i].filename[0] == '\0'){
   		availableIndex = i;
   		break;
@@ -131,6 +145,7 @@ int fs_create(const char *filename)
   r.fileSize = 0;
   r.firstDataBlockIndex = FAT_EOC;
   FS->rootDir.rootDirEntries[availableIndex] = r;
+  numFiles++;
   return 0;
 }
 
@@ -144,7 +159,7 @@ int fs_delete(const char *filename)
   	return -1;
   }
   int fileIndex = -1;
-  for(int i = 0; i<128; i++){
+  for(int i = 0; i<FS_FILE_MAX_COUNT; i++){
   	if(memcmp(FS->rootDir.rootDirEntries[i].filename, filename, filename_len) == 0){
   		fileIndex = i;
   	}
@@ -167,6 +182,7 @@ int fs_delete(const char *filename)
   FS->rootDir.rootDirEntries[fileIndex].filename[0] = '\0';
   FS->rootDir.rootDirEntries[fileIndex].fileSize = 0;
   FS->rootDir.rootDirEntries[fileIndex].firstDataBlockIndex = FAT_EOC;
+  numFiles--;
   return 0;
 }
 
@@ -177,7 +193,7 @@ int fs_ls(void)
   	return -1;
   }  
   printf("FS Ls:\n");
-  for(int i = 0; i<128; i++){
+  for(int i = 0; i<FS_FILE_MAX_COUNT; i++){
   	rootDirEntry r = FS->rootDir.rootDirEntries[i];
   	if(r.filename[0] != '\0'){
   		printf("file: %s, size: %d, data_blk: %d\n", r.filename, r.fileSize, r.firstDataBlockIndex);
@@ -189,30 +205,85 @@ int fs_ls(void)
 
 int fs_open(const char *filename)
 {
-  /* TODO: Phase 3 */
-  UNUSED(filename);
+	//Check error conditions
+  size_t filename_len = strlen(filename);
+  if(filename == NULL || filename[filename_len] != '\0' || filename_len > FS_FILENAME_LEN){
+  	return -1;
+  }
+  int fileIndex = -1;
+  for(int i = 0; i<FS_FILE_MAX_COUNT; i++){
+  	if(memcmp(FS->rootDir.rootDirEntries[i].filename, filename, filename_len) == 0){
+  		fileIndex = i;
+  	}
+  }
+  if (fileIndex == -1){
+  	return -1;
+  }
+
+  if(numOpenFiles >= FS_OPEN_MAX_COUNT){
+  	return -1;
+  }
+
+  for(int i = 0; i<FS_OPEN_MAX_COUNT; i++){
+  	if(fileDescriptorTable[i].filename[0] == '\0'){
+  		for(size_t j = 0; j<filename_len; j++){
+  			fileDescriptorTable[i].filename[j] = (uint8_t)filename[j];
+  		}
+  		fileDescriptorTable[i].offset = 0;
+  		break;
+  	}
+  }
+  numOpenFiles++;
   return 0;
 }
 
 int fs_close(int fd)
 {
-  /* TODO: Phase 3 */
-  UNUSED(fd);
+  if(fd >= FS_OPEN_MAX_COUNT || fd < 0){
+  	return -1;
+  }
+  if(fileDescriptorTable[fd].filename[0] == '\0'){
+  	return -1;
+  }
+
+  fileDescriptorTable[fd].filename[0] = '\0';
+  fileDescriptorTable[fd].offset = 0;
+  numOpenFiles--;
   return 0;
 }
 
 int fs_stat(int fd)
 {
-  /* TODO: Phase 3 */
-  UNUSED(fd);
-  return 0;
+  if(fd >= FS_OPEN_MAX_COUNT || fd < 0){
+  	return -1;
+  }
+  if(fileDescriptorTable[fd].filename[0] == '\0'){
+  	return -1;
+  }
+
+  uint8_t filename[FS_FILENAME_LEN];
+  memcpy(filename, fileDescriptorTable[fd].filename, sizeof(fileDescriptorTable[fd].filename));
+  for(int i = 0; i<FS_FILE_MAX_COUNT; i++){
+  	if(FS->rootDir.rootDirEntries[i].filename == filename){
+  		return FS->rootDir.rootDirEntries[i].fileSize;
+  	}
+  }
+  return -1;
 }
 
 int fs_lseek(int fd, size_t offset)
 {
-  /* TODO: Phase 3 */
-  UNUSED(fd);
-  UNUSED(offset);
+  if(fd >= FS_OPEN_MAX_COUNT || fd < 0){
+  	return -1;
+  }
+  if(fileDescriptorTable[fd].filename[0] == '\0'){
+  	return -1;
+  }
+  if(offset > (size_t)fs_stat(fd)){
+  	return -1;
+  }
+
+  fileDescriptorTable[fd].offset = offset;
   return 0;
 }
 
