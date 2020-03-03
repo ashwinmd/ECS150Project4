@@ -108,12 +108,12 @@ int fs_info(void)
 int fs_create(const char *filename)
 {
   //Check error conditions
-  size_t filename_len = sizeof(filename);
-  if(filename == NULL || filename[filename_len-1] != '\0' || filename_len > FS_FILENAME_LEN){
+  size_t filename_len = strlen(filename);
+  if(filename == NULL || filename[filename_len] != '\0' || filename_len > FS_FILENAME_LEN){
   	return -1;
   }
   for(int i = 0; i<128; i++){
-  	if(memcmp(FS->rootDir.rootDirEntries[i].filename, filename, filename_len) != 0){
+  	if(memcmp(FS->rootDir.rootDirEntries[i].filename, filename, filename_len) == 0){
   		return -1;
   	}
   }
@@ -173,10 +173,16 @@ int fs_ls(void)
   if(block_disk_count() == -1){
   	return -1;
   }  
-  //file: Makefile, size: 1362, data_blk: 1
+  printf("FS Ls:\n");
   for(int i = 0; i<128; i++){
   	rootDirEntry r = FS->rootDir.rootDirEntries[i];
-  	printf("file: %s, size: %d, data_blk: %d\n", r.filename, r.fileSize, r.firstDataBlockIndex);
+  	if(r.filename != NULL){
+  		printf("file: %s, size: %d, data_blk: %d\n", r.filename, r.fileSize, r.firstDataBlockIndex);
+  	}
+  	else{
+  		break;
+  	}
+  	
   }
   return 0;
 }
