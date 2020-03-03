@@ -264,7 +264,7 @@ int fs_stat(int fd)
   uint8_t filename[FS_FILENAME_LEN];
   memcpy(filename, fileDescriptorTable[fd].filename, sizeof(fileDescriptorTable[fd].filename));
   for(int i = 0; i<FS_FILE_MAX_COUNT; i++){
-  	if(FS->rootDir.rootDirEntries[i].filename == filename){
+  	if(memcmp(FS->rootDir.rootDirEntries[i].filename, filename, sizeof(filename)) == 0){
   		return FS->rootDir.rootDirEntries[i].fileSize;
   	}
   }
@@ -282,7 +282,6 @@ int fs_lseek(int fd, size_t offset)
   if(offset > (size_t)fs_stat(fd)){
   	return -1;
   }
-
   fileDescriptorTable[fd].offset = offset;
   return 0;
 }

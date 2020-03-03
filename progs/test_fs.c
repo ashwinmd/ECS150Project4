@@ -169,7 +169,7 @@ void thread_fs_add(void *arg)
 	char *diskname, *filename, *buf;
 	int fd, fs_fd;
 	struct stat st;
-	//int written;
+	int written;
 
 	if (t_arg->argc < 2)
 		die("Usage: <diskname> <host filename>");
@@ -209,27 +209,22 @@ void thread_fs_add(void *arg)
 		die("Cannot open file");
 	}
 
-	int fs_fd2 = fs_open(filename);
-	printf("Size of 0: %d, Size of 1: %d", fs_stat(0), fs_stat(1));
-	fs_close(fs_fd);
-	fs_close(fs_fd2);
 
+	written = fs_write(fs_fd, buf, st.st_size);
 
-	// written = fs_write(fs_fd, buf, st.st_size);
+	if (fs_close(fs_fd)) {
+		fs_umount();
+		die("Cannot close file");
+	}
 
-	// if (fs_close(fs_fd)) {
-	// 	fs_umount();
-	// 	die("Cannot close file");
-	// }
+	if (fs_umount())
+		die("Cannot unmount diskname");
 
-	// if (fs_umount())
-	// 	die("Cannot unmount diskname");
+	printf("Wrote file '%s' (%d/%zu bytes)\n", filename, written,
+		   st.st_size);
 
-	// printf("Wrote file '%s' (%d/%zu bytes)\n", filename, written,
-	// 	   st.st_size);
-
-	// munmap(buf, st.st_size);
-	// close(fd);
+	munmap(buf, st.st_size);
+	close(fd);
 }
 
 void thread_fs_ls(void *arg)
