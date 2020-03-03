@@ -41,7 +41,6 @@ typedef struct{
     superblock superblock;
     FAT FAT;
     rootDirectory rootDir;
-    int numRootDirEntries;
 } ECS150FS;
 
 
@@ -65,7 +64,6 @@ int fs_mount(const char *diskname)
     block_read(i + 1, FS->FAT + (BLOCK_SIZE/2) * i);
   }
   block_read(FS->superblock.rootDirBlockIndex, &FS->rootDir);
-  FS->numRootDirEntries = 0;
   return 0;
 }
 
@@ -117,16 +115,22 @@ int fs_create(const char *filename)
   		return -1;
   	}
   }
-
+  //Find a place in the root directory to add the file
+  int availableIndex = -1;
+  for(int i = 0; i<128; i++){
+  	if(FS->rootDir.rootDirEntries[i].filename[0] == '\0'){
+  		availableIndex = i;
+  		break;
+  	}
+  }
   //Create a new empty file
-  rootDirEntry r = FS->rootDir.rootDirEntries[FS->numRootDirEntries];
+  rootDirEntry r = FS->rootDir.rootDirEntries[availableIndex];
   for(size_t i = 0; i<filename_len; i++){
   	r.filename[i] = (uint8_t)filename[i];
   }
   r.fileSize = 0;
   r.firstDataBlockIndex = FAT_EOC;
-  FS->rootDir.rootDirEntries[FS->numRootDirEntries] = r;
-  FS->numRootDirEntries++;
+  FS->rootDir.rootDirEntries[availableIndex] = r;
   return 0;
 }
 
@@ -135,8 +139,8 @@ int fs_delete(const char *filename)
   //Removing a file is the opposite procedure: the file’s entry must be emptied and all the data blocks containing the file’s contents must be freed in the FAT.
 
   //Check error conditions
-  size_t filename_len = sizeof(filename);
-  if(filename == NULL || filename[filename_len-1] != '\0' || filename_len > FS_FILENAME_LEN){
+  size_t filename_len = strlen(filename);
+  if(filename == NULL || filename[filename_len] != '\0' || filename_len > FS_FILENAME_LEN){
   	return -1;
   }
   int fileIndex = -1;
@@ -163,7 +167,6 @@ int fs_delete(const char *filename)
   FS->rootDir.rootDirEntries[fileIndex].filename[0] = '\0';
   FS->rootDir.rootDirEntries[fileIndex].fileSize = 0;
   FS->rootDir.rootDirEntries[fileIndex].firstDataBlockIndex = FAT_EOC;
-  FS->numRootDirEntries--;
   return 0;
 }
 
@@ -176,11 +179,8 @@ int fs_ls(void)
   printf("FS Ls:\n");
   for(int i = 0; i<128; i++){
   	rootDirEntry r = FS->rootDir.rootDirEntries[i];
-  	if(r.filename != NULL){
+  	if(r.filename[0] != '\0'){
   		printf("file: %s, size: %d, data_blk: %d\n", r.filename, r.fileSize, r.firstDataBlockIndex);
-  	}
-  	else{
-  		break;
   	}
   	
   }
