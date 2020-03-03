@@ -61,9 +61,8 @@ int fs_mount(const char *diskname)
     return -1;
   }
   FS->FAT = (uint16_t*)malloc(FS->superblock.numFATBlocks*BLOCK_SIZE);
-  for(int i = 0; i<=FS->superblock.numFATBlocks; i++){
-    //block_read(i, &FS->FAT[(i-1)*4096]);
-    block_read(i + 1, (void*) FS->FAT + 2048 * i);
+  for(int i = 0; i<FS->superblock.numFATBlocks; i++){
+    block_read(i + 1, FS->FAT + (BLOCK_SIZE/2) * i);
   }
   block_read(FS->superblock.rootDirBlockIndex, &FS->rootDir);
   FS->numRootDirEntries = 0;
@@ -83,18 +82,19 @@ int fs_umount(void)
 
 int fs_info(void)
 {
+  printf("FS Info:\n");
   printf("total_blk_count=%d\n", FS->superblock.totalBlocks);
   printf("fat_blk_count=%d\n", FS->superblock.numFATBlocks);
   printf("rdir_blk=%d\n", FS->superblock.rootDirBlockIndex);
   printf("data_blk=%d\n", FS->superblock.dataBlockStartIndex);
-  printf("data_blk_count%d\n", FS->superblock.numDataBlocks);
+  printf("data_blk_count=%d\n", FS->superblock.numDataBlocks);
   int fat_free = 0;
-  for(int i = 0; i<FS->superblock.numFATBlocks*(4096/2); i++){
+  for(int i = 0; i<FS->superblock.numDataBlocks; i++){
     if(FS->FAT[i] == 0){
       fat_free++;
     }
   }
-  printf("fat_free_ratio=%d/%d\n", fat_free, FS->superblock.numFATBlocks*(4096/2));
+  printf("fat_free_ratio=%d/%d\n", fat_free, FS->superblock.numDataBlocks);
   int rdir_free = 0;
   for(int i = 0; i<128; i++){
     if((char)FS->rootDir.rootDirEntries[i].filename[0] == '\0'){
@@ -164,7 +164,6 @@ int fs_delete(const char *filename)
   FS->rootDir.rootDirEntries[fileIndex].fileSize = 0;
   FS->rootDir.rootDirEntries[fileIndex].firstDataBlockIndex = FAT_EOC;
   FS->numRootDirEntries--;
-
   return 0;
 }
 
