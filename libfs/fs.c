@@ -57,9 +57,6 @@ int fs_mount(const char *diskname)
   block_disk_open(diskname);
   FS = malloc(sizeof(ECS150FS));
   block_read(0, &FS->superblock);
-  if(FS->superblock.totalBlocks != block_disk_count()) {
-    printf("No match\n");
-  }
   char desiredSig[] = "ECS150FS";
   const void *sig = (char*)FS->superblock.signature;
   if(memcmp(desiredSig, sig, 8) != 0){
@@ -80,9 +77,14 @@ int fs_mount(const char *diskname)
 
 int fs_umount(void)
 {
-  if(FS == NULL){
+  if(FS == NULL || numOpenFiles != 0){
     return -1;
   }
+  block_write(0, &(FS->superblock));
+  for(int i = 0; i<FS->superblock.numFATBlocks; i++){
+    block_write(i + 1, FS->FAT + (BLOCK_SIZE/2) * i);
+  }
+  block_write(FS->superblock.numFATBlocks+1, &(FS->rootDir));
   free(FS->FAT);
   free(FS);
   return block_disk_close();
