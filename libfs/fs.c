@@ -27,7 +27,7 @@ typedef struct __attribute__((__packed__)){
 typedef uint16_t* FAT;
 
 typedef struct __attribute__((__packed__)){
-    uint8_t filename[16];
+    uint8_t filename[FS_FILENAME_LEN];
     uint32_t fileSize;
     uint16_t firstDataBlockIndex;
     uint8_t padding[10];
@@ -170,7 +170,7 @@ int fs_delete(const char *filename)
 
   //CHECK IF FILE IS OPEN
   for(int i = 0; i<FS_OPEN_MAX_COUNT; i++){
-  	if(memcmp(fileDescriptorTable[i].filename, filename, sizeof(filename)) == 0){
+  	if(memcmp(fileDescriptorTable[i].filename, filename, FS_FILENAME_LEN) == 0){
   		return -1;
   	}
   }
@@ -294,114 +294,40 @@ int fs_lseek(int fd, size_t offset)
 int allocateNewBlock(rootDirEntry r){
 	if(r.firstDataBlockIndex == FAT_EOC){
 		for(uint16_t i = 0; i< FS_FILE_MAX_COUNT; i++){
-			if(FAT[i] == 0){
+			if(FS->FAT[i] == 0){
 				r.firstDataBlockIndex = i;
-				FAT[i] = FAT_EOC;
+				FS->FAT[i] = FAT_EOC;
 				return 0;
 			}
 		}
 	}
 	else{
-		uint16_t availableIndex = -1;
+		uint16_t availableIndex = 0;
 		for(uint16_t i = 0; i< FS_FILE_MAX_COUNT; i++){
-			if(FAT[i] == 0){
+			if(FS->FAT[i] == 0){
 				availableIndex = i;
 			}
 		}
-		if(availableIndex == -1){
+		if(availableIndex == 0){
 			return -1;
 		}
 		uint16_t curBlockIndex = r.firstDataBlockIndex;
-		while(FAT[curBlockIndex] != EOC){
-			curBlockIndex = FAT[curBlockIndex];
+		while(FS->FAT[curBlockIndex] != FAT_EOC){
+			curBlockIndex = FS->FAT[curBlockIndex];
 		}
 
-		FAT[curBlockIndex] = availableIndex;
-		FAT[availableIndex] = FAT_EOC;
+		FS->FAT[curBlockIndex] = availableIndex;
+		FS->FAT[availableIndex] = FAT_EOC;
 		return 0;
 	}
 	return -1;
 
 }
 
-
-
-int fs_write(int fd, void *buf, size_t count)
-{
-  if(fd >= FS_OPEN_MAX_COUNT || fd < 0){
-  	return -1;
-  }
-  if(fileDescriptorTable[fd].filename[0] == '\0'){
-  	return -1;
-  }
-  rootDirEntry r;
-  for(int i = 0; i<FS_FILE_MAX_COUNT; i++){
-  	if(memcmp(fileDescriptorTable[fd].filename, FS->rootDir.rootDirEntries[i].filename) == 0){
-  		r = FS->rootDir.rootDirEntries[i];
-  	}
-  }
-
-  size_t blockOffset = offset%(size_t)BLOCK_SIZE;
-  size_t bytesLeftToWrite = count;
-  uint16_t curBlockIndex = findCurrentBlock(r, fileDescriptorTable[fd].offset);
-  if(curBlockIndex = FAT_EOC){
-  	//Allocate space
-  	if(allocateNewBlock(r) == -1){
-  		return count - bytesLeftToWrite;
-  	}
-  }
-  while(bytesLeftToWrite > BLOCK_SIZE){
-  		size_t distanceToBlockEnd = BLOCK_SIZE - blockOffset;
-  		if(distanceToBlockEnd < BLOCK_SIZE){
-  			void* fragmentToWrite = malloc(blockOffset);
-  			memcpy(fragmentToWrite, buf, blockOffset);
-  			if(bounceBufferWrite(fragmentToRead, curBlockIndex, blockOffset) != 0){
-  				return -1;
-  			}
-  			else{
-  				buf = buf + distanceToBlockEnd;
-  				bytesLeftToWrite = bytesLeftToWrite - distanceToBlockEnd;
-  			}
-  		}
-  		else{
-  			block_write(curBlockIndex, buf);
-  			buf = buf + BLOCK_SIZE;
-  			bytesLeftToWrite = bytesLeftToWrite - BLOCK_SIZE;
-  		}
-  		blockOffset = 0;
-  		curBlockIndex = FAT[curBlockIndex];
-  		if(curBlockIndex = FAT_EOC){
-  			if(curBlockIndex = FAT_EOC){
-  				//Allocate space
-  				if(allocateNewBlock(r) == -1){
-  					r.fileSize+=count - bytesLeftToWrite;
-  					return count - bytesLeftToWrite;
-  				}
-  			}
-  		}
-  }
-
-
-  if(bytesLeftToRead == BLOCK_SIZE){
-  	block_read(curBlockIndex, buf);
-  	bytesLeftToWrite-=BLOCK_SIZE;
-  }
-  else{
-  	if(bounceBufferRead(buf, curBlockIndex, blockOffset) != 0){
-  		return -1;
-  	}
-  	bytesLeftToWrite-=blockOffset;
-  }
-
-  fileDescriptorTable[fd].offset+=count;
-  r.fileSize+=count - bytesLeftToWrite;
-  return count - bytesLeftToWrite;
-}
-
 static uint16_t findCurrentBlockIndex(rootDirEntry r, size_t offset){
 	uint16_t curBlockIndex = r.firstDataBlockIndex;
 	while(offset > BLOCK_SIZE && curBlockIndex != FAT_EOC){
-		curBlockIndex = FAT[curBlockIndex];
+		curBlockIndex = FS->FAT[curBlockIndex];
 		offset = offset - BLOCK_SIZE;
 	}
 	return curBlockIndex;
@@ -429,6 +355,80 @@ static int bounceBufferWrite(void* buf, uint16_t curBlockIndex, size_t blockOffs
 	return -1;
 }
 
+
+
+int fs_write(int fd, void *buf, size_t count)
+{
+  if(fd >= FS_OPEN_MAX_COUNT || fd < 0){
+  	return -1;
+  }
+  if(fileDescriptorTable[fd].filename[0] == '\0'){
+  	return -1;
+  }
+  rootDirEntry r;
+  for(int i = 0; i<FS_FILE_MAX_COUNT; i++){
+  	if(memcmp(fileDescriptorTable[fd].filename, FS->rootDir.rootDirEntries[i].filename, FS_FILENAME_LEN) == 0){
+  		r = FS->rootDir.rootDirEntries[i];
+  	}
+  }
+
+  size_t blockOffset = fileDescriptorTable[fd].offset%(size_t)BLOCK_SIZE;
+  size_t bytesLeftToWrite = count;
+  uint16_t curBlockIndex = findCurrentBlockIndex(r, fileDescriptorTable[fd].offset);
+  if(curBlockIndex == FAT_EOC){
+  	//Allocate space
+  	if(allocateNewBlock(r) == -1){
+  		return count - bytesLeftToWrite;
+  	}
+  }
+  while(bytesLeftToWrite > BLOCK_SIZE){
+  		size_t distanceToBlockEnd = BLOCK_SIZE - blockOffset;
+  		if(distanceToBlockEnd < BLOCK_SIZE){
+  			void* fragmentToWrite = malloc(blockOffset);
+  			memcpy(fragmentToWrite, buf, blockOffset);
+  			if(bounceBufferWrite(fragmentToWrite, curBlockIndex, blockOffset) != 0){
+  				return -1;
+  			}
+  			else{
+  				buf = buf + distanceToBlockEnd;
+  				bytesLeftToWrite = bytesLeftToWrite - distanceToBlockEnd;
+  			}
+  		}
+  		else{
+  			block_write(curBlockIndex, buf);
+  			buf = buf + BLOCK_SIZE;
+  			bytesLeftToWrite = bytesLeftToWrite - BLOCK_SIZE;
+  		}
+  		blockOffset = 0;
+  		curBlockIndex = FS->FAT[curBlockIndex];
+  		if(curBlockIndex == FAT_EOC){
+  			if(curBlockIndex == FAT_EOC){
+  				//Allocate space
+  				if(allocateNewBlock(r) == -1){
+  					r.fileSize+=count - bytesLeftToWrite;
+  					return count - bytesLeftToWrite;
+  				}
+  			}
+  		}
+  }
+
+
+  if(bytesLeftToWrite == BLOCK_SIZE){
+  	block_read(curBlockIndex, buf);
+  	bytesLeftToWrite-=BLOCK_SIZE;
+  }
+  else{
+  	if(bounceBufferWrite(buf, curBlockIndex, blockOffset) != 0){
+  		return -1;
+  	}
+  	bytesLeftToWrite-=blockOffset;
+  }
+
+  fileDescriptorTable[fd].offset+=count;
+  r.fileSize+=count - bytesLeftToWrite;
+  return count - bytesLeftToWrite;
+}
+
 int fs_read(int fd, void *buf, size_t count)
 {
   if(fd >= FS_OPEN_MAX_COUNT || fd < 0){
@@ -439,13 +439,13 @@ int fs_read(int fd, void *buf, size_t count)
   }
   rootDirEntry r;
   for(int i = 0; i<FS_FILE_MAX_COUNT; i++){
-  	if(memcmp(fileDescriptorTable[fd].filename, FS->rootDir.rootDirEntries[i].filename) == 0){
+  	if(memcmp(fileDescriptorTable[fd].filename, FS->rootDir.rootDirEntries[i].filename, FS_FILENAME_LEN) == 0){
   		r = FS->rootDir.rootDirEntries[i];
   	}
   }
 
-  uint16_t curBlockIndex = findCurrentBlock(r, fileDescriptorTable[fd].offset);
-  size_t blockOffset = offset%(size_t)BLOCK_SIZE;
+  uint16_t curBlockIndex = findCurrentBlockIndex(r, fileDescriptorTable[fd].offset);
+  size_t blockOffset = fileDescriptorTable[fd].offset%(size_t)BLOCK_SIZE;
   size_t bytesLeftToRead = count;
   while(bytesLeftToRead > BLOCK_SIZE){
   		size_t distanceToBlockEnd = BLOCK_SIZE - blockOffset;
@@ -466,8 +466,8 @@ int fs_read(int fd, void *buf, size_t count)
   			bytesLeftToRead = bytesLeftToRead - BLOCK_SIZE;
   		}
   		blockOffset = 0;
-  		curBlockIndex = FAT[curBlockIndex];
-  		if(curBlockIndex = FAT_EOC){
+  		curBlockIndex = FS->FAT[curBlockIndex];
+  		if(curBlockIndex == FAT_EOC){
   			return 0;
   		}
   }
