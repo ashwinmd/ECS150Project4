@@ -405,6 +405,8 @@ int fs_write(int fd, void *buf, size_t count)
       fileDescriptorTable[fd].offset += count - bytesLeftToWrite;
       return count - bytesLeftToWrite;
     }
+    //If allocated, add to new blocks allocated
+    newBlocksAllocated++;
   }
 
 

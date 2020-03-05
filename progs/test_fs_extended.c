@@ -62,7 +62,7 @@ int main(int argc, char **argv)
 		return -1;
 	}
 	char* diskname = argv[1];
-	fs_mount(diskname);
+	assert(fs_mount(diskname) == 0);
 
 	test_small_rw_operation();
 
