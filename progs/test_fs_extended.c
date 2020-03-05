@@ -34,24 +34,32 @@ void test_small_rw_operation(){
 
 	assert(fs_create("test-fs-1") == 0);
 	assert(fs_open("test-fs-1") == 0);
-	void* emptyBlock = malloc(BLOCK_SIZE);
+	//Read entire empty block to disk
+	char* emptyBlock = malloc(BLOCK_SIZE);
+	emptyBlock[10] = 3;
 	assert(fs_write(0, emptyBlock, BLOCK_SIZE) == BLOCK_SIZE);
-	assert(fs_lseek(0, 2000) == 0);
+	//Try reading the whole empty block in and seeing if it matches. This is a block write + block read test
+	void* emptyBlockReadBuffer = malloc(BLOCK_SIZE);
+	assert(fs_lseek(0,0) == 0);
+	assert(fs_read(0, emptyBlockReadBuffer, BLOCK_SIZE) == 0);
+	assert(memcmp(emptyBlockReadBuffer, emptyBlock, BLOCK_SIZE) == 0);
+
+	//Write a small file in the middle of a block. Then, try reading it. This is a small read/write operations test
+	assert(fs_lseek(0, 20) == 0);
 	assert(fs_write(0, buf, st.st_size) == st.st_size);
-	void* block = malloc(BLOCK_SIZE);
+	void* block = malloc(4096);
 	block_read((size_t)FS->rootDir.rootDirEntries[0].firstDataBlockIndex, block);
-	assert(memcmp(block + 2000, buf, st.st_size) == 0);
-	assert(fs_lseek(0, 2000) == 0);
+	assert(memcmp(block + 20, buf, st.st_size) == 0);
+	assert(fs_lseek(0, 20) == 0);
 	char* readBuffer = malloc(st.st_size);
 	assert(fs_read(0, readBuffer, st.st_size) == 0);
 	assert(memcmp(readBuffer, buf, st.st_size) == 0);
 
-	munmap(buf, st.st_size);
-	close(fd);
-	free(emptyBlock);
-	free(block);
-	free(readBuffer);
-
+	// munmap(buf, st.st_size);
+	// close(fd);
+	// free(emptyBlock);
+	// free(block);
+	// free(readBuffer);
 
 }
 
