@@ -41,6 +41,7 @@ void test_small_rw_operation(){
 	void* block = malloc(BLOCK_SIZE);
 	block_read((size_t)FS->rootDir.rootDirEntries[0].firstDataBlockIndex, block);
 	assert(memcmp(block + 2000, buf, st.st_size) == 0);
+	assert(fs_lseek(0, 2000) == 0);
 	char* readBuffer = malloc(st.st_size);
 	assert(fs_read(0, readBuffer, st.st_size) == 0);
 	assert(memcmp(readBuffer, buf, st.st_size) == 0);

@@ -395,15 +395,19 @@ int fs_write(int fd, void *buf, size_t count)
 
   size_t blockOffset = fileDescriptorTable[fd].offset%BLOCK_SIZE;
   size_t bytesLeftToWrite = count;
+  uint32_t newBlocksAllocated = 0;
   uint16_t curBlockIndex = findCurrentBlockIndex(FS->rootDir.rootDirEntries[rootDirIndex], fileDescriptorTable[fd].offset);
+
   if(curBlockIndex == FAT_EOC){
-    //Allocate space
+    //Allocate space. If we were unable to allocate a new block, return.
     curBlockIndex = allocateNewBlock(rootDirIndex);
     if(curBlockIndex == FAT_EOC){
       fileDescriptorTable[fd].offset += count - bytesLeftToWrite;
       return count - bytesLeftToWrite;
     }
   }
+
+
   while(bytesLeftToWrite > BLOCK_SIZE){
     size_t distanceToBlockEnd = BLOCK_SIZE - blockOffset;
     if(distanceToBlockEnd < BLOCK_SIZE){
@@ -428,29 +432,32 @@ int fs_write(int fd, void *buf, size_t count)
       if(curBlockIndex == FAT_EOC){
         //Allocate space
         curBlockIndex = allocateNewBlock(rootDirIndex);
+        //If allocation unsuccessful, return
         if(curBlockIndex == FAT_EOC){
           fileDescriptorTable[fd].offset += count - bytesLeftToWrite;
-          FS->rootDir.rootDirEntries[rootDirIndex].fileSize += count - bytesLeftToWrite;
           return count - bytesLeftToWrite;
         }
+        //increment new blocks allocated
+        newBlocksAllocated++;
       }
     }
   }
 
 
   if(bytesLeftToWrite == BLOCK_SIZE){
-    block_read(curBlockIndex, buf);
+    block_write(curBlockIndex, buf);
+    FS->rootDir.rootDirEntries[rootDirIndex].fileSize+=(newBlocksAllocated*BLOCK_SIZE);
     bytesLeftToWrite-=BLOCK_SIZE;
   }
   else{
     if(bounceBufferWrite(buf, curBlockIndex, blockOffset) != 0){
       return -1;
     }
+    FS->rootDir.rootDirEntries[rootDirIndex].fileSize+=((newBlocksAllocated-1)*BLOCK_SIZE + bytesLeftToWrite);
     bytesLeftToWrite=0;
   }
 
   fileDescriptorTable[fd].offset+=count;
-  FS->rootDir.rootDirEntries[rootDirIndex].fileSize+=count - bytesLeftToWrite;
   return count - bytesLeftToWrite;
 }
 
@@ -473,6 +480,7 @@ int fs_read(int fd, void *buf, size_t count)
   curBlockIndex = findCurrentBlockIndex(r, fileDescriptorTable[fd].offset);
   size_t blockOffset = fileDescriptorTable[fd].offset%(size_t)BLOCK_SIZE;
   size_t bytesLeftToRead = count;
+
   while(bytesLeftToRead > BLOCK_SIZE){
     size_t distanceToBlockEnd = BLOCK_SIZE - blockOffset;
     if(distanceToBlockEnd < BLOCK_SIZE){
