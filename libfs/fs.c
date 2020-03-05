@@ -356,9 +356,10 @@ static int bounceBufferRead(void* buf, uint16_t curBlockIndex, size_t blockOffse
   void* bounceBuffer = malloc(BLOCK_SIZE);
   if(block_read((size_t)curBlockIndex, bounceBuffer) == 0){
     memcpy(buf, bounceBuffer + blockOffset, BLOCK_SIZE - blockOffset);
-    free(bounceBuffer);
+    //free(bounceBuffer);
     return 0;
   }
+  free(bounceBuffer);
   return -1;
 }
 
@@ -371,6 +372,7 @@ static int bounceBufferWrite(void* buf, uint16_t curBlockIndex, size_t blockOffs
       return 0;
     }
   }
+  free(bounceBuffer);
   return -1;
 }
 
