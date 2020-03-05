@@ -54,7 +54,12 @@ ECS150FS* FS;
 
 int fs_mount(const char *diskname)
 {
-  block_disk_open(diskname);
+  if(diskname == NULL){
+    return -1;
+  }
+  if(block_disk_open(diskname) == -1){
+    return -1;
+  }
   FS = malloc(sizeof(ECS150FS));
   block_read(0, &FS->superblock);
   char desiredSig[] = "ECS150FS";
@@ -77,6 +82,10 @@ int fs_mount(const char *diskname)
 
 int fs_umount(void)
 {
+  //Check if underlying virtual disk open
+  if(block_disk_count() == -1){
+    return -1;
+  }
   if(FS == NULL || numOpenFiles != 0){
     return -1;
   }
@@ -93,6 +102,10 @@ int fs_umount(void)
 
 int fs_info(void)
 {
+  //Check if underlying virtual disk open
+  if(block_disk_count() == -1){
+    return -1;
+  }
   printf("FS Info:\n");
   printf("total_blk_count=%d\n", FS->superblock.totalBlocks);
   printf("fat_blk_count=%d\n", FS->superblock.numFATBlocks);
@@ -123,6 +136,11 @@ int fs_create(const char *filename)
   if(filename == NULL || filename[filename_len] != '\0' || filename_len > FS_FILENAME_LEN || numFiles > FS_FILE_MAX_COUNT){
     return -1;
   }
+  //Check if root directory contains max number of files
+  if(FS->rootDir.rootDirEntries[FS_FILE_MAX_COUNT-1].filename[0] != '\0'){
+    return -1;
+  }
+  //Check if file already exists
   for(int i = 0; i<FS_FILE_MAX_COUNT; i++){
     if(memcmp(FS->rootDir.rootDirEntries[i].filename, filename, filename_len) == 0){
       return -1;
@@ -202,7 +220,6 @@ int fs_ls(void)
     if(r.filename[0] != '\0'){
       printf("file: %s, size: %d, data_blk: %d\n", r.filename, r.fileSize, r.firstDataBlockIndex);
     }
-
   }
   return 0;
 }
@@ -443,14 +460,15 @@ int fs_read(int fd, void *buf, size_t count)
   if(fileDescriptorTable[fd].filename[0] == '\0'){
     return -1;
   }
-  rootDirEntry r;
+  rootDirEntry r = FS->rootDir.rootDirEntries[0];
   for(int i = 0; i<FS_FILE_MAX_COUNT; i++){
     if(memcmp(fileDescriptorTable[fd].filename, FS->rootDir.rootDirEntries[i].filename, FS_FILENAME_LEN) == 0){
       r = FS->rootDir.rootDirEntries[i];
     }
   }
 
-  uint16_t curBlockIndex = findCurrentBlockIndex(r, fileDescriptorTable[fd].offset);
+  uint16_t curBlockIndex = -1;
+  curBlockIndex = findCurrentBlockIndex(r, fileDescriptorTable[fd].offset);
   size_t blockOffset = fileDescriptorTable[fd].offset%(size_t)BLOCK_SIZE;
   size_t bytesLeftToRead = count;
   while(bytesLeftToRead > BLOCK_SIZE){
