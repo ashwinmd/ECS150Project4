@@ -460,16 +460,12 @@ int fs_write(int fd, void *buf, size_t count)
     if(bounceBufferWrite(buf, curBlockIndex, blockOffset, bytesLeftToWrite) != 0){
       return -1;
     }
-    if((FS->rootDir.rootDirEntries[rootDirIndex].fileSize%BLOCK_SIZE != 0 || FS->rootDir.rootDirEntries[rootDirIndex].fileSize == 0) && bytesLeftToWrite + blockOffset > FS->rootDir.rootDirEntries[rootDirIndex].fileSize%BLOCK_SIZE){
-      FS->rootDir.rootDirEntries[rootDirIndex].fileSize += (bytesLeftToWrite + blockOffset - FS->rootDir.rootDirEntries[rootDirIndex].fileSize%BLOCK_SIZE);
-      if(newBlocksAllocated != 0){
-        FS->rootDir.rootDirEntries[rootDirIndex].fileSize += (newBlocksAllocated-1)*BLOCK_SIZE;
-      }
-    }
     bytesLeftToWrite=0;
   }
-
   fileDescriptorTable[fd].offset+=(count-bytesLeftToWrite);
+  if(FS->rootDir.rootDirEntries[fd].fileSize <= fileDescriptorTable[fd].offset){
+    FS->rootDir.rootDirEntries[fd].fileSize += count - bytesLeftToWrite;
+  }
   return count - bytesLeftToWrite;
 }
 
