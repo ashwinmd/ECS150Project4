@@ -453,7 +453,7 @@ int fs_write(int fd, void *buf, size_t count)
 
   if(bytesLeftToWrite == BLOCK_SIZE){
     block_write(curBlockIndex, buf);
-    FS->rootDir.rootDirEntries[rootDirIndex].fileSize+=(newBlocksAllocated*BLOCK_SIZE);
+    //FS->rootDir.rootDirEntries[rootDirIndex].fileSize+=(newBlocksAllocated*BLOCK_SIZE);
     bytesLeftToWrite-=BLOCK_SIZE;
   }
   else if(bytesLeftToWrite != 0 && bytesLeftToWrite < BLOCK_SIZE){
@@ -463,8 +463,8 @@ int fs_write(int fd, void *buf, size_t count)
     bytesLeftToWrite=0;
   }
   fileDescriptorTable[fd].offset+=(count-bytesLeftToWrite);
-  if(FS->rootDir.rootDirEntries[fd].fileSize <= fileDescriptorTable[fd].offset){
-    FS->rootDir.rootDirEntries[fd].fileSize += count - bytesLeftToWrite;
+  if(FS->rootDir.rootDirEntries[rootDirIndex].fileSize <= fileDescriptorTable[fd].offset){
+    FS->rootDir.rootDirEntries[rootDirIndex].fileSize += (count - bytesLeftToWrite);
   }
   return count - bytesLeftToWrite;
 }
@@ -477,12 +477,18 @@ int fs_read(int fd, void *buf, size_t count)
   if(fileDescriptorTable[fd].filename[0] == '\0'){
     return -1;
   }
+
+
   rootDirEntry r = FS->rootDir.rootDirEntries[0];
   for(int i = 0; i<FS_FILE_MAX_COUNT; i++){
     if(memcmp(fileDescriptorTable[fd].filename, FS->rootDir.rootDirEntries[i].filename, FS_FILENAME_LEN) == 0){
       r = FS->rootDir.rootDirEntries[i];
       break;
     }
+  }
+
+  if(count - fileDescriptorTable[fd].filename[offset] > r.fileSize){
+    return -1;
   }
 
   

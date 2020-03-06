@@ -122,7 +122,7 @@ void test_small_rw_operation(){
 	//Write a small file in the middle of a block. Then, try reading it. This is a small read/write operations test
 	assert(fs_lseek(0, 20) == 0);
 	assert(fs_write(0, buf, st.st_size) == st.st_size);
-	assert(fs_stat(0) == st.st_size);
+	assert(fs_stat(0) == 4096);
 	void* block = malloc(BLOCK_SIZE);
 	block_read((size_t)(FS->rootDir.rootDirEntries[0].firstDataBlockIndex + FS->superblock.dataBlockStartIndex), block);
 	assert(memcmp(block + 20, buf, st.st_size) == 0);
