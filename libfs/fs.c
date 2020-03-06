@@ -390,12 +390,17 @@ int fs_write(int fd, void *buf, size_t count)
   if(fileDescriptorTable[fd].filename[0] == '\0'){
     return -1;
   }
+
   int rootDirIndex = -1;
   for(int i = 0; i<FS_FILE_MAX_COUNT; i++){
     if(memcmp(fileDescriptorTable[fd].filename, FS->rootDir.rootDirEntries[i].filename, FS_FILENAME_LEN) == 0){
       rootDirIndex = i;
       break;
     }
+  }
+
+  if(fileDescriptorTable[fd].offset + count > BLOCK_SIZE*FS->superblock.numDataBlocks){
+    return -1;
   }
 
   size_t blockOffset = fileDescriptorTable[fd].offset%BLOCK_SIZE;

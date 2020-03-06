@@ -39,18 +39,18 @@ void test_small_rw_operation(){
   assert(fs_open("test-fs-2") == 1);
 
   //Write max number of blocks, then write another one should fail
-  char* maxBlock = malloc(FS->superblock.totalBlocks*BLOCK_SIZE);
-  char* maxBlock2 = malloc(FS->superblock.totalBlocks*BLOCK_SIZE);
-  for(int i = 0; i < FS->superblock.totalBlocks * BLOCK_SIZE; i++) {
+  char* maxBlock = malloc(FS->superblock.numDataBlocks*BLOCK_SIZE);
+  char* maxBlock2 = malloc(FS->superblock.numDataBlocks*BLOCK_SIZE);
+  for(int i = 0; i < FS->superblock.numDataBlocks * BLOCK_SIZE; i++) {
     maxBlock[i] = 3;
   }
-  for(int i = 0; i < FS->superblock.totalBlocks * BLOCK_SIZE; i++) {
+  for(int i = 0; i < FS->superblock.numDataBlocks * BLOCK_SIZE; i++) {
     maxBlock2[i] = 4;
   }
   assert(fs_create("test-fs-3") == 0);
   assert(fs_open("test-fs-3") == 2);
-  assert(fs_write(2, maxBlock, FS->superblock.totalBlocks * BLOCK_SIZE) == 0);
-  assert(fs_write(2, maxBlock2, FS->superblock.totalBlocks * BLOCK_SIZE) == -1);
+  assert(fs_write(0, maxBlock, FS->superblock.numDataBlocks * BLOCK_SIZE) == 0);
+  assert(fs_write(2, maxBlock2, FS->superblock.numDataBlocks * BLOCK_SIZE) == -1);
   close(2);
 
 
@@ -225,7 +225,7 @@ int main(int argc, char **argv)
 
   test_small_rw_operation();
   test_oob_read();
-  test_open_and_create()
+  test_open_and_create();
 
 
 
