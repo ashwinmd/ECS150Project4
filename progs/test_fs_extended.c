@@ -95,7 +95,7 @@ void test_small_rw_operation(){
 
 	munmap(buf, st.st_size);
 	close(fd);
-	//free(emptyBlockReadBuffer);
+	free(emptyBlockReadBuffer);
 	free(emptyBlock);
 	free(block);
 	free(readBuffer);

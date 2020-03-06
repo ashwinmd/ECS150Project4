@@ -355,10 +355,10 @@ static uint16_t findCurrentBlockIndex(rootDirEntry r, size_t offset){
   return curBlockIndex;
 }
 
-static int bounceBufferRead(void* buf, uint16_t curBlockIndex, size_t blockOffset){
+static int bounceBufferRead(void* buf, uint16_t curBlockIndex, size_t blockOffset, size_t numBytesToRead){
   void* bounceBuffer = malloc(BLOCK_SIZE);
   if(block_read((size_t)curBlockIndex, bounceBuffer) == 0){
-    memcpy(buf, bounceBuffer + blockOffset, BLOCK_SIZE - blockOffset);
+    memcpy(buf, bounceBuffer + blockOffset, numBytesToRead);
     free(bounceBuffer);
     return 0;
   }
@@ -366,10 +366,10 @@ static int bounceBufferRead(void* buf, uint16_t curBlockIndex, size_t blockOffse
   return -1;
 }
 
-static int bounceBufferWrite(void* buf, uint16_t curBlockIndex, size_t blockOffset){
+static int bounceBufferWrite(void* buf, uint16_t curBlockIndex, size_t blockOffset, size_t numBytesToWrite){
   void* bounceBuffer = malloc(BLOCK_SIZE);
   if(block_read((size_t)curBlockIndex, bounceBuffer) == 0){
-    memcpy(bounceBuffer + blockOffset, buf, BLOCK_SIZE - blockOffset);
+    memcpy(bounceBuffer + blockOffset, buf, numBytesToWrite);
     if(block_write((size_t)curBlockIndex, bounceBuffer) == 0){
       free(bounceBuffer);
       return 0;
@@ -419,7 +419,7 @@ int fs_write(int fd, void *buf, size_t count)
     if(distanceToBlockEnd < BLOCK_SIZE){
       void* fragmentToWrite = malloc(distanceToBlockEnd);
       memcpy(fragmentToWrite, buf, distanceToBlockEnd);
-      if(bounceBufferWrite(fragmentToWrite, curBlockIndex, blockOffset) != 0){
+      if(bounceBufferWrite(fragmentToWrite, curBlockIndex, blockOffset, distanceToBlockEnd) != 0){
         return -1;
       }
       else{
@@ -454,7 +454,7 @@ int fs_write(int fd, void *buf, size_t count)
     bytesLeftToWrite-=BLOCK_SIZE;
   }
   else if(bytesLeftToWrite != 0 && bytesLeftToWrite < BLOCK_SIZE){
-    if(bounceBufferWrite(buf, curBlockIndex, blockOffset) != 0){
+    if(bounceBufferWrite(buf, curBlockIndex, blockOffset, bytesLeftToWrite) != 0){
       return -1;
     }
     if((FS->rootDir.rootDirEntries[rootDirIndex].fileSize%BLOCK_SIZE != 0 || FS->rootDir.rootDirEntries[rootDirIndex].fileSize == 0) && bytesLeftToWrite + blockOffset > FS->rootDir.rootDirEntries[rootDirIndex].fileSize%BLOCK_SIZE){
@@ -495,7 +495,7 @@ int fs_read(int fd, void *buf, size_t count)
     size_t distanceToBlockEnd = BLOCK_SIZE - blockOffset;
     if(distanceToBlockEnd < BLOCK_SIZE){
       void* fragmentToRead = malloc(distanceToBlockEnd);
-      if(bounceBufferRead(fragmentToRead, curBlockIndex, blockOffset) != 0){
+      if(bounceBufferRead(fragmentToRead, curBlockIndex, blockOffset, distanceToBlockEnd) != 0){
         return -1;
       }
       else{
@@ -521,7 +521,7 @@ int fs_read(int fd, void *buf, size_t count)
     block_read(curBlockIndex, buf);
   }
   else if(bytesLeftToRead < BLOCK_SIZE && bytesLeftToRead != 0){
-    if(bounceBufferRead(buf, curBlockIndex, blockOffset) != 0){
+    if(bounceBufferRead(buf, curBlockIndex, blockOffset, bytesLeftToRead) != 0){
       return -1;
     }
   }
