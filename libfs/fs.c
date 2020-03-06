@@ -235,6 +235,7 @@ int fs_open(const char *filename)
   for(int i = 0; i<FS_FILE_MAX_COUNT; i++){
     if(memcmp(FS->rootDir.rootDirEntries[i].filename, filename, filename_len) == 0){
       fileIndex = i;
+      break;
     }
   }
   if (fileIndex == -1){
@@ -325,6 +326,7 @@ uint16_t allocateNewBlock(int rootDirEntryIndex){
     for(uint16_t i = 0; i< FS_FILE_MAX_COUNT; i++){
       if(FS->FAT[i] == 0){
         availableIndex = i;
+        break;
       }
     }
     if(availableIndex == 0){
@@ -357,7 +359,7 @@ static int bounceBufferRead(void* buf, uint16_t curBlockIndex, size_t blockOffse
   void* bounceBuffer = malloc(BLOCK_SIZE);
   if(block_read((size_t)curBlockIndex, bounceBuffer) == 0){
     memcpy(buf, bounceBuffer + blockOffset, BLOCK_SIZE - blockOffset);
-    //free(bounceBuffer);
+    free(bounceBuffer);
     return 0;
   }
   free(bounceBuffer);
@@ -391,6 +393,7 @@ int fs_write(int fd, void *buf, size_t count)
   for(int i = 0; i<FS_FILE_MAX_COUNT; i++){
     if(memcmp(fileDescriptorTable[fd].filename, FS->rootDir.rootDirEntries[i].filename, FS_FILENAME_LEN) == 0){
       rootDirIndex = i;
+      break;
     }
   }
 
@@ -432,7 +435,6 @@ int fs_write(int fd, void *buf, size_t count)
     blockOffset = 0;
     curBlockIndex = FS->FAT[curBlockIndex];
     if(curBlockIndex == FAT_EOC){
-      if(curBlockIndex == FAT_EOC){
         //Allocate space
         curBlockIndex = allocateNewBlock(rootDirIndex);
         //If allocation unsuccessful, return
@@ -442,7 +444,6 @@ int fs_write(int fd, void *buf, size_t count)
         }
         //increment new blocks allocated
         newBlocksAllocated++;
-      }
     }
   }
 
@@ -481,6 +482,7 @@ int fs_read(int fd, void *buf, size_t count)
   for(int i = 0; i<FS_FILE_MAX_COUNT; i++){
     if(memcmp(fileDescriptorTable[fd].filename, FS->rootDir.rootDirEntries[i].filename, FS_FILENAME_LEN) == 0){
       r = FS->rootDir.rootDirEntries[i];
+      break;
     }
   }
 

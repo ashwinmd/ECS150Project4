@@ -32,9 +32,46 @@ void test_small_rw_operation(){
 	if (!buf)
 		return;
 
+	
+	assert(fs_create("test-fs-1") == 0);
+	assert(fs_create("test-fs-2") == 0);
+	assert(fs_open("test-fs-1") == 0);
+	assert(fs_open("test-fs-2") == 1);
+
+
+	//Test FAT first allocation
+	char* appendBlock = malloc(BLOCK_SIZE*2);
+	for(int i = 0; i < BLOCK_SIZE*2; i++) {
+	  appendBlock[i] = 1;
+	}
+	char* filledBlock = malloc(BLOCK_SIZE*2 + 2000);
+	for(int i = 0; i < BLOCK_SIZE*2 + 2000; i++) {
+	  filledBlock[i] = 1;
+	}
+	assert(fs_write(0, filledBlock, BLOCK_SIZE*2 + 2000));
+	char* filledBlock2 = malloc (3000);
+	for(int i = 0; i < 3000; i++) {
+	  filledBlock2[i] = 2;
+	}
+	assert(fs_write(1, filledBlock2, 3000));
+	assert(fs_close(0) == 0);
+	assert(fs_delete("test-fs-1") == 0);
+	assert(fs_write(1, appendBlock, BLOCK_SIZE*2));
+	assert(FS->rootDir.rootDirEntries[1].firstDataBlockIndex == 4);
+	assert(FS->FAT[4] == 1);
+	assert(FS->FAT[1] == 2);
+	assert(FS->FAT[2] == FAT_EOC);
+	assert(fs_close(1) == 0);
+	assert(fs_delete("test-fs-2") == 0);
+
+	printf("Finished FAT first test cases\n");
+
+
+	//Test block write + read and test small read/write operation
+
+	//Read entire empty block to disk
 	assert(fs_create("test-fs-1") == 0);
 	assert(fs_open("test-fs-1") == 0);
-	//Read entire empty block to disk
 	char* emptyBlock = malloc(BLOCK_SIZE);
 	emptyBlock[10] = 3;
 	assert(fs_write(0, emptyBlock, BLOCK_SIZE) == BLOCK_SIZE);
@@ -47,19 +84,21 @@ void test_small_rw_operation(){
 	//Write a small file in the middle of a block. Then, try reading it. This is a small read/write operations test
 	assert(fs_lseek(0, 20) == 0);
 	assert(fs_write(0, buf, st.st_size) == st.st_size);
-	void* block = malloc(4096);
+	void* block = malloc(BLOCK_SIZE);
 	block_read((size_t)FS->rootDir.rootDirEntries[0].firstDataBlockIndex, block);
 	assert(memcmp(block + 20, buf, st.st_size) == 0);
+	printf("Got past read\n");
 	assert(fs_lseek(0, 20) == 0);
 	char* readBuffer = malloc(st.st_size);
 	assert(fs_read(0, readBuffer, st.st_size) == 0);
 	assert(memcmp(readBuffer, buf, st.st_size) == 0);
 
-	// munmap(buf, st.st_size);
-	// close(fd);
-	// free(emptyBlock);
-	// free(block);
-	// free(readBuffer);
+	munmap(buf, st.st_size);
+	close(fd);
+	//free(emptyBlockReadBuffer);
+	free(emptyBlock);
+	free(block);
+	free(readBuffer);
 
 }
 
