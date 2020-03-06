@@ -48,21 +48,41 @@ void test_small_rw_operation(){
 	for(int i = 0; i < BLOCK_SIZE*2 + 2000; i++) {
 	  filledBlock[i] = 1;
 	}
+	//Write to file 1, then read it in and check its contents. Then close and delete file 1
 	assert(fs_write(0, filledBlock, BLOCK_SIZE*2 + 2000));
+	void* file1ReadBuffer = malloc(BLOCK_SIZE);
+	assert(fs_read(0, file1ReadBuffer, BLOCK_SIZE*2 + 2000) == 0);
+	assert(memcmp(file1ReadBuffer, filledBlock, BLOCK_SIZE*2 + 2000) == 0);
 	char* filledBlock2 = malloc (3000);
 	for(int i = 0; i < 3000; i++) {
 	  filledBlock2[i] = 2;
 	}
+	
+	//Write to file 2, then delete file 1 and write to file 2 again
 	assert(fs_write(1, filledBlock2, 3000));
 	assert(fs_close(0) == 0);
 	assert(fs_delete("test-fs-1") == 0);
 	assert(fs_write(1, appendBlock, BLOCK_SIZE*2));
+	//Read to file 2 and check its contents
+	void* file2ReadBuffer1 = malloc(3000);
+	assert(fs_read(1, file2ReadBuffer1, 3000) == 3000);
+	assert(memcmp(file2ReadBuffer1, filledBlock2, 3000) == 3000);
+	void* file2ReadBuffer2 = malloc(BLOCK_SIZE*2);
+	assert(fs_read(1, file2ReadBuffer2, BLOCK_SIZE*2) == BLOCK_SIZE*2);
+	assert(memcmp(file2ReadBuffer2, filledBlock2, BLOCK_SIZE*2) == 0);
 	assert(FS->rootDir.rootDirEntries[1].firstDataBlockIndex == 4);
 	assert(FS->FAT[4] == 1);
 	assert(FS->FAT[1] == 2);
 	assert(FS->FAT[2] == FAT_EOC);
 	assert(fs_close(1) == 0);
 	assert(fs_delete("test-fs-2") == 0);
+
+	free(filledBlock2);
+	free(filledBlock);
+	free(appendBlock);
+	free(file1ReadBuffer);
+	free(file2ReadBuffer2);
+	free(file2ReadBuffer1);
 
 	printf("Finished FAT first test cases\n");
 
@@ -78,19 +98,19 @@ void test_small_rw_operation(){
 	//Try reading the whole empty block in and seeing if it matches. This is a block write + block read test
 	void* emptyBlockReadBuffer = malloc(BLOCK_SIZE);
 	assert(fs_lseek(0,0) == 0);
-	assert(fs_read(0, emptyBlockReadBuffer, BLOCK_SIZE) == 0);
+	assert(fs_read(0, emptyBlockReadBuffer, BLOCK_SIZE) == BLOCK_SIZE);
 	assert(memcmp(emptyBlockReadBuffer, emptyBlock, BLOCK_SIZE) == 0);
 
 	//Write a small file in the middle of a block. Then, try reading it. This is a small read/write operations test
 	assert(fs_lseek(0, 20) == 0);
 	assert(fs_write(0, buf, st.st_size) == st.st_size);
 	void* block = malloc(BLOCK_SIZE);
-	block_read((size_t)FS->rootDir.rootDirEntries[0].firstDataBlockIndex, block);
+	block_read((size_t)(FS->rootDir.rootDirEntries[0].firstDataBlockIndex + FS->superblock.dataBlockStartIndex), block);
 	assert(memcmp(block + 20, buf, st.st_size) == 0);
 	printf("Got past read\n");
 	assert(fs_lseek(0, 20) == 0);
 	char* readBuffer = malloc(st.st_size);
-	assert(fs_read(0, readBuffer, st.st_size) == 0);
+	assert(fs_read(0, readBuffer, st.st_size) == st.st_size);
 	assert(memcmp(readBuffer, buf, st.st_size) == 0);
 
 	munmap(buf, st.st_size);

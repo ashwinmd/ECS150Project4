@@ -435,7 +435,7 @@ int fs_write(int fd, void *buf, size_t count)
       bytesLeftToWrite = bytesLeftToWrite - BLOCK_SIZE;
     }
     blockOffset = 0;
-    curFATBlockIndex = FS->FAT[curBlockIndex];
+    curFATBlockIndex = FS->FAT[curFATBlockIndex];
     if(curFATBlockIndex == FAT_EOC){
         //Allocate space
         curFATBlockIndex = allocateNewFATBlock(rootDirIndex);
@@ -514,7 +514,7 @@ int fs_read(int fd, void *buf, size_t count)
       bytesLeftToRead = bytesLeftToRead - BLOCK_SIZE;
     }
     blockOffset = 0;
-    curFATBlockIndex = FS->FAT[curBlockIndex];
+    curFATBlockIndex = FS->FAT[curFATBlockIndex];
     if(curBlockIndex == FAT_EOC){
       fileDescriptorTable[fd].offset += (count - bytesLeftToRead);
       return count - bytesLeftToRead;
