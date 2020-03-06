@@ -417,8 +417,8 @@ int fs_write(int fd, void *buf, size_t count)
   while(bytesLeftToWrite > BLOCK_SIZE){
     size_t distanceToBlockEnd = BLOCK_SIZE - blockOffset;
     if(distanceToBlockEnd < BLOCK_SIZE){
-      void* fragmentToWrite = malloc(blockOffset);
-      memcpy(fragmentToWrite, buf, blockOffset);
+      void* fragmentToWrite = malloc(distanceToBlockEnd);
+      memcpy(fragmentToWrite, buf, distanceToBlockEnd);
       if(bounceBufferWrite(fragmentToWrite, curBlockIndex, blockOffset) != 0){
         return -1;
       }
@@ -453,7 +453,7 @@ int fs_write(int fd, void *buf, size_t count)
     FS->rootDir.rootDirEntries[rootDirIndex].fileSize+=(newBlocksAllocated*BLOCK_SIZE);
     bytesLeftToWrite-=BLOCK_SIZE;
   }
-  else{
+  else if(bytesLeftToWrite != 0 && bytesLeftToWrite < BLOCK_SIZE){
     if(bounceBufferWrite(buf, curBlockIndex, blockOffset) != 0){
       return -1;
     }
@@ -494,12 +494,12 @@ int fs_read(int fd, void *buf, size_t count)
   while(bytesLeftToRead > BLOCK_SIZE){
     size_t distanceToBlockEnd = BLOCK_SIZE - blockOffset;
     if(distanceToBlockEnd < BLOCK_SIZE){
-      void* fragmentToRead = malloc(blockOffset);
-      memcpy(fragmentToRead, buf, blockOffset);
+      void* fragmentToRead = malloc(distanceToBlockEnd);
       if(bounceBufferRead(fragmentToRead, curBlockIndex, blockOffset) != 0){
         return -1;
       }
       else{
+        memcpy(buf, fragmentToRead, distanceToBlockEnd);
         buf = buf + distanceToBlockEnd;
         bytesLeftToRead = bytesLeftToRead - distanceToBlockEnd;
       }
@@ -520,7 +520,7 @@ int fs_read(int fd, void *buf, size_t count)
   if(bytesLeftToRead == BLOCK_SIZE){
     block_read(curBlockIndex, buf);
   }
-  else{
+  else if(bytesLeftToRead < BLOCK_SIZE && bytesLeftToRead != 0){
     if(bounceBufferRead(buf, curBlockIndex, blockOffset) != 0){
       return -1;
     }
