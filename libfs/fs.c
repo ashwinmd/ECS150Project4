@@ -512,7 +512,8 @@ int fs_read(int fd, void *buf, size_t count)
     blockOffset = 0;
     curBlockIndex = FS->FAT[curBlockIndex];
     if(curBlockIndex == FAT_EOC){
-      return 0;
+      fileDescriptorTable[fd].offset += (count - bytesLeftToRead);
+      return count - bytesLeftToRead;
     }
   }
 
@@ -526,6 +527,6 @@ int fs_read(int fd, void *buf, size_t count)
     }
   }
 
-  fileDescriptorTable[fd].offset+=count;
-  return 0;
+  fileDescriptorTable[fd].offset+= (count - bytesLeftToRead);
+  return count - bytesLeftToRead;
 }
