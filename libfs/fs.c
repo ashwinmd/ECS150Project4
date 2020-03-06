@@ -310,7 +310,8 @@ int fs_lseek(int fd, size_t offset)
   return 0;
 }
 
-uint16_t allocateNewBlock(int rootDirEntryIndex){
+//THIS RETURNS THE FIRST AVAIALBLE FAT INDEX!!!!!
+uint16_t allocateNewFATBlock(int rootDirEntryIndex){
   uint16_t availableIndex = 0;
   if(FS->rootDir.rootDirEntries[rootDirEntryIndex].firstDataBlockIndex == FAT_EOC){
     for(uint16_t i = 0; i< FS_FILE_MAX_COUNT; i++){
@@ -332,12 +333,12 @@ uint16_t allocateNewBlock(int rootDirEntryIndex){
     if(availableIndex == 0){
       return FAT_EOC;
     }
-    uint16_t curBlockIndex = FS->rootDir.rootDirEntries[rootDirEntryIndex].firstDataBlockIndex;
-    while(FS->FAT[curBlockIndex] != FAT_EOC){
-      curBlockIndex = FS->FAT[curBlockIndex];
+    uint16_t curFATBlockIndex = FS->rootDir.rootDirEntries[rootDirEntryIndex].firstDataBlockIndex;
+    while(FS->FAT[curFATBlockIndex] != FAT_EOC){
+      curFATBlockIndex = FS->FAT[curFATBlockIndex];
     }
 
-    FS->FAT[curBlockIndex] = availableIndex;
+    FS->FAT[curFATBlockIndex] = availableIndex;
     FS->FAT[availableIndex] = FAT_EOC;
     FS->superblock.numDataBlocks++;
     return availableIndex;
@@ -346,13 +347,13 @@ uint16_t allocateNewBlock(int rootDirEntryIndex){
 
 }
 
-static uint16_t findCurrentBlockIndex(rootDirEntry r, size_t offset){
-  uint16_t curBlockIndex = r.firstDataBlockIndex;
-  while(offset > BLOCK_SIZE && curBlockIndex != FAT_EOC){
-    curBlockIndex = FS->FAT[curBlockIndex];
+static uint16_t findCurrentFATBlockIndex(rootDirEntry r, size_t offset){
+  uint16_t curFATBlockIndex = r.firstDataBlockIndex;
+  while(offset > BLOCK_SIZE && curFATBlockIndex != FAT_EOC){
+    curFATBlockIndex = FS->FAT[curFATBlockIndex];
     offset = offset - BLOCK_SIZE;
   }
-  return curBlockIndex;
+  return curFATBlockIndex;
 }
 
 static int bounceBufferRead(void* buf, uint16_t curBlockIndex, size_t blockOffset, size_t numBytesToRead){
@@ -400,18 +401,19 @@ int fs_write(int fd, void *buf, size_t count)
   size_t blockOffset = fileDescriptorTable[fd].offset%BLOCK_SIZE;
   size_t bytesLeftToWrite = count;
   uint32_t newBlocksAllocated = 0;
-  uint16_t curBlockIndex = findCurrentBlockIndex(FS->rootDir.rootDirEntries[rootDirIndex], fileDescriptorTable[fd].offset);
 
-  if(curBlockIndex == FAT_EOC){
+  uint16_t curFATBlockIndex = findCurrentFATBlockIndex(FS->rootDir.rootDirEntries[rootDirIndex], fileDescriptorTable[fd].offset);
+  if(curFATBlockIndex == FAT_EOC){
     //Allocate space. If we were unable to allocate a new block, return.
-    curBlockIndex = allocateNewBlock(rootDirIndex);
-    if(curBlockIndex == FAT_EOC){
+    curFATBlockIndex = allocateNewFATBlock(rootDirIndex);
+    if(curFATBlockIndex == FAT_EOC){
       fileDescriptorTable[fd].offset += count - bytesLeftToWrite;
       return count - bytesLeftToWrite;
     }
     //If allocated, add to new blocks allocated
     newBlocksAllocated++;
   }
+  uint16_t curBlockIndex = curFATBlockIndex + FS->superblock.dataBlockStartIndex;
 
 
   while(bytesLeftToWrite > BLOCK_SIZE){
@@ -433,18 +435,19 @@ int fs_write(int fd, void *buf, size_t count)
       bytesLeftToWrite = bytesLeftToWrite - BLOCK_SIZE;
     }
     blockOffset = 0;
-    curBlockIndex = FS->FAT[curBlockIndex];
-    if(curBlockIndex == FAT_EOC){
+    curFATBlockIndex = FS->FAT[curBlockIndex];
+    if(curFATBlockIndex == FAT_EOC){
         //Allocate space
-        curBlockIndex = allocateNewBlock(rootDirIndex);
+        curFATBlockIndex = allocateNewFATBlock(rootDirIndex);
         //If allocation unsuccessful, return
-        if(curBlockIndex == FAT_EOC){
+        if(curFATBlockIndex == FAT_EOC){
           fileDescriptorTable[fd].offset += count - bytesLeftToWrite;
           return count - bytesLeftToWrite;
         }
         //increment new blocks allocated
         newBlocksAllocated++;
     }
+    curBlockIndex = curFATBlockIndex + FS->superblock.dataBlockStartIndex;
   }
 
 
@@ -486,8 +489,9 @@ int fs_read(int fd, void *buf, size_t count)
     }
   }
 
-  uint16_t curBlockIndex = -1;
-  curBlockIndex = findCurrentBlockIndex(r, fileDescriptorTable[fd].offset);
+  
+  uint16_t curFATBlockIndex = findCurrentFATBlockIndex(r, fileDescriptorTable[fd].offset);
+  uint16_t curBlockIndex = curFATBlockIndex + FS->superblock.dataBlockStartIndex;
   size_t blockOffset = fileDescriptorTable[fd].offset%(size_t)BLOCK_SIZE;
   size_t bytesLeftToRead = count;
 
@@ -510,21 +514,24 @@ int fs_read(int fd, void *buf, size_t count)
       bytesLeftToRead = bytesLeftToRead - BLOCK_SIZE;
     }
     blockOffset = 0;
-    curBlockIndex = FS->FAT[curBlockIndex];
+    curFATBlockIndex = FS->FAT[curBlockIndex];
     if(curBlockIndex == FAT_EOC){
       fileDescriptorTable[fd].offset += (count - bytesLeftToRead);
       return count - bytesLeftToRead;
     }
+    curBlockIndex = curFATBlockIndex + FS->superblock.dataBlockStartIndex;
   }
 
 
   if(bytesLeftToRead == BLOCK_SIZE){
     block_read(curBlockIndex, buf);
+    bytesLeftToRead-=BLOCK_SIZE;
   }
   else if(bytesLeftToRead < BLOCK_SIZE && bytesLeftToRead != 0){
     if(bounceBufferRead(buf, curBlockIndex, blockOffset, bytesLeftToRead) != 0){
       return -1;
     }
+    bytesLeftToRead = 0;
   }
 
   fileDescriptorTable[fd].offset+= (count - bytesLeftToRead);
