@@ -8,227 +8,323 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <assert.h>
+
+#include <fs.h>
+
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
+
+#define test_fs_error(fmt, ...) \
+	fprintf(stderr, "%s: "fmt"\n", __func__, ##__VA_ARGS__)
+
+#define die(...)				\
+do {							\
+	test_fs_error(__VA_ARGS__);	\
+	exit(1);					\
+} while (0)
+
+#define die_perror(msg)			\
+do {							\
+	perror(msg);				\
+	exit(1);					\
+} while (0)
 
 
-#include <fs.c>
+struct thread_arg {
+	int argc;
+	char **argv;
+};
 
+void thread_fs_stat(void *arg)
+{
+	struct thread_arg *t_arg = arg;
+	char *diskname, *filename;
+	int fs_fd;
+	int stat;
 
-void test_small_rw_operation(){
-  //Use lseek to move the offset. Write our test-fs-1 to disk. Then, read the file. We should only get the message in test-fs-1.
-  struct stat st;
+	if (t_arg->argc < 2)
+		die("need <diskname> <filename>");
 
-  /* Open file on host computer */
-  int fd = open("test-fs-1", O_RDONLY);
-  if (fd < 0)
-    return;
-  if (fstat(fd, &st))
-    return;
-  if (!S_ISREG(st.st_mode))
-    return;
+	diskname = t_arg->argv[0];
+	filename = t_arg->argv[1];
 
-  /* Map file into buffer */
-  char* buf = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-  if (!buf)
-    return;
+	if (fs_mount(diskname))
+		die("Cannot mount diskname");
 
+	fs_fd = fs_open(filename);
+	if (fs_fd < 0) {
+		fs_umount();
+		die("Cannot open file");
+	}
 
-  assert(fs_create("test-fs-1") == 0);
-  assert(fs_create("test-fs-2") == 0);
-  assert(fs_open("test-fs-1") == 0);
-  assert(fs_open("test-fs-2") == 1);
+	stat = fs_stat(fs_fd);
+	if (stat < 0) {
+		fs_close(fs_fd);
+		fs_umount();
+		die("Cannot stat file");
+	}
+	if (!stat) {
+		fs_close(fs_fd);
+		fs_umount();
+		/* Nothing to read, file is empty */
+		printf("Empty file\n");
+		return;
+	}
 
-  //Write max number of blocks, then write another one should fail
-  char* maxBlock = malloc(FS->superblock.numDataBlocks*BLOCK_SIZE);
-  char* maxBlock2 = malloc(FS->superblock.numDataBlocks*BLOCK_SIZE);
-  for(int i = 0; i < FS->superblock.numDataBlocks * BLOCK_SIZE; i++) {
-    maxBlock[i] = 3;
-  }
-  for(int i = 0; i < FS->superblock.numDataBlocks * BLOCK_SIZE; i++) {
-    maxBlock2[i] = 4;
-  }
-  assert(fs_create("test-fs-3") == 0);
-  assert(fs_open("test-fs-3") == 2);
-  assert(fs_write(0, maxBlock, FS->superblock.numDataBlocks * BLOCK_SIZE) == 0);
-  assert(fs_write(2, maxBlock2, FS->superblock.numDataBlocks * BLOCK_SIZE) == -1);
-  close(2);
+	if (fs_close(fs_fd)) {
+		fs_umount();
+		die("Cannot close file");
+	}
 
+	if (fs_umount())
+		die("cannot unmount diskname");
 
-  //Test FAT first allocation
-  char* appendBlock = malloc(BLOCK_SIZE*2);
-  for(int i = 0; i < BLOCK_SIZE*2; i++) {
-    appendBlock[i] = 3;
-  }
-  char* filledBlock = malloc(BLOCK_SIZE*2 + 2000);
-  for(int i = 0; i < BLOCK_SIZE*2 + 2000; i++) {
-    filledBlock[i] = 1;
-  }
-  //Write to file 1, then read it in and check its contents. Then close and delete file 1
-  assert(fs_write(0, filledBlock, BLOCK_SIZE*2 + 2000));
-  assert(fs_stat(0) == BLOCK_SIZE*2 + 2000);
-  void* file1ReadBuffer = malloc(BLOCK_SIZE*2 + 2000);
-  assert(fs_lseek(0,0) == 0);
-  assert(fs_read(0, file1ReadBuffer, BLOCK_SIZE*2 + 2000) == BLOCK_SIZE*2 + 2000);
-  assert(memcmp(file1ReadBuffer, filledBlock, BLOCK_SIZE*2 + 2000) == 0);
-  char* filledBlock2 = malloc (3000);
-  for(int i = 0; i < 3000; i++) {
-    filledBlock2[i] = 2;
-  }
-
-  //Write to file 2, then delete file 1 and write to file 2 again
-  assert(fs_write(1, filledBlock2, 3000));
-  assert(fs_stat(1) == 3000);
-  assert(fs_close(0) == 0);
-  assert(fs_delete("test-fs-1") == 0);
-  assert(fs_write(1, appendBlock, BLOCK_SIZE*2));
-  printf("fs_stat 1 = %d\n", fs_stat(1));
-  assert(fs_stat(1) == 3000 + BLOCK_SIZE*2);
-  //Read to file 2 and check its contents
-  void* file2ReadBuffer1 = malloc(3000);
-  assert(fs_lseek(1, 0) == 0);
-  assert(fs_read(1, file2ReadBuffer1, 3000) == 3000);
-  assert(memcmp(file2ReadBuffer1, filledBlock2, 3000) == 0);
-  void* file2ReadBuffer2 = malloc(BLOCK_SIZE*2);
-  assert(fs_read(1, file2ReadBuffer2, BLOCK_SIZE*2) == BLOCK_SIZE*2);
-  int numDiff = 0;
-  int firstDiffPos = -1;
-  for(int i = 0; i<BLOCK_SIZE*2; i++){
-    if(((char*)file2ReadBuffer2)[i] != ((char*)appendBlock)[i]){
-      if(firstDiffPos == -1){
-        firstDiffPos = i;
-      }
-      numDiff++;
-      printf("File2ReadBuffer: %d, File2ReadBuffer: %d\n", ((char*)file2ReadBuffer2)[i], ((char*)appendBlock)[i]);
-    }
-  }
-  printf("Num different = %d, first different position = %d\n", numDiff, firstDiffPos);
-  assert(memcmp(file2ReadBuffer2, appendBlock, BLOCK_SIZE*2) == 0);
-  assert(FS->rootDir.rootDirEntries[1].firstDataBlockIndex == 4);
-  assert(FS->FAT[4] == 1);
-  assert(FS->FAT[1] == 2);
-  assert(FS->FAT[2] == FAT_EOC);
-  assert(fs_close(1) == 0);
-  assert(fs_delete("test-fs-2") == 0);
-
-  free(filledBlock2);
-  free(filledBlock);
-  free(appendBlock);
-  free(file1ReadBuffer);
-  free(file2ReadBuffer2);
-  free(file2ReadBuffer1);
-
-  printf("Finished FAT first test cases\n");
-
-
-  //Test block write + read and test small read/write operation
-
-  //Read entire empty block to disk
-  assert(fs_create("test-fs-1") == 0);
-  assert(fs_open("test-fs-1") == 0);
-  char* emptyBlock = malloc(BLOCK_SIZE);
-  emptyBlock[10] = 3;
-  assert(fs_write(0, emptyBlock, BLOCK_SIZE) == BLOCK_SIZE);
-  //Try reading the whole empty block in and seeing if it matches. This is a block write + block read test
-  void* emptyBlockReadBuffer = malloc(BLOCK_SIZE);
-  assert(fs_lseek(0,0) == 0);
-  assert(fs_read(0, emptyBlockReadBuffer, BLOCK_SIZE) == BLOCK_SIZE);
-  assert(memcmp(emptyBlockReadBuffer, emptyBlock, BLOCK_SIZE) == 0);
-
-  //Write a small file in the middle of a block. Then, try reading it. This is a small read/write operations test
-  assert(fs_lseek(0, 20) == 0);
-  assert(fs_write(0, buf, st.st_size) == st.st_size);
-  assert(fs_stat(0) == 4096);
-  void* block = malloc(BLOCK_SIZE);
-  block_read((size_t)(FS->rootDir.rootDirEntries[0].firstDataBlockIndex + FS->superblock.dataBlockStartIndex), block);
-  assert(memcmp(block + 20, buf, st.st_size) == 0);
-  printf("Got past read\n");
-  assert(fs_lseek(0, 20) == 0);
-  char* readBuffer = malloc(st.st_size);
-  assert(fs_read(0, readBuffer, st.st_size) == st.st_size);
-  assert(memcmp(readBuffer, buf, st.st_size) == 0);
-
-  munmap(buf, st.st_size);
-  close(fd);
-  free(emptyBlockReadBuffer);
-  free(emptyBlock);
-  free(block);
-  free(readBuffer);
-
+	printf("Size of file '%s' is %d bytes\n", filename, stat);
 }
 
-void test_oob_read(){
-  //testing writing half a block then reading moree than half. should return -1;
-  struct stat st;
+void thread_fs_cat(void *arg)
+{
+	struct thread_arg *t_arg = arg;
+	char *diskname, *filename, *buf;
+	int fs_fd;
+	int stat, read;
 
-  /* Open file on host computer */
-  int fd = open("test-fs-1", O_RDONLY);
-  if (fd < 0)
-    return;
-  if (fstat(fd, &st))
-    return;
-  if (!S_ISREG(st.st_mode))
-    return;
+	if (t_arg->argc < 2)
+		die("need <diskname> <filename>");
 
-  /* Map file into buffer */
-  char* buf = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-  if (!buf)
-    return;
+	diskname = t_arg->argv[0];
+	filename = t_arg->argv[1];
 
-  char* half_block = malloc(BLOCK_SIZE/2);
-  for(int i = 0; i < BLOCK_SIZE/2; i++){
-    half_block[i] = 1;
-  }
-  fs_create("test-oob-read");
-  fs_open("test-oob-read");
+	if (fs_mount(diskname))
+		die("Cannot mount diskname");
 
-  assert(fs_write(0, half_block, BLOCK_SIZE/2) == BLOCK_SIZE/2);
-  assert(fs_read(0, half_block, BLOCK_SIZE) == -1);
-  close(fd);
-  close(0);
+	fs_fd = fs_open(filename);
+	if (fs_fd < 0) {
+		fs_umount();
+		die("Cannot open file");
+	}
 
+	stat = fs_stat(fs_fd);
+	if (stat < 0) {
+		fs_umount();
+		die("Cannot stat file");
+	}
+	if (!stat) {
+		/* Nothing to read, file is empty */
+		printf("Empty file\n");
+		return;
+	}
+	buf = malloc(stat);
+	if (!buf) {
+		perror("malloc");
+		fs_umount();
+		die("Cannot malloc");
+	}
+
+	read = fs_read(fs_fd, buf, stat);
+
+	if (fs_close(fs_fd)) {
+		fs_umount();
+		die("Cannot close file");
+	}
+
+	if (fs_umount())
+		die("cannot unmount diskname");
+
+	printf("Read file '%s' (%d/%d bytes)\n", filename, read, stat);
+	printf("Content of the file:\n");
+	fwrite(buf, 1, stat, stdout);
+	fflush(stdout);
+
+	free(buf);
 }
 
-void test_open_and_create(){
-  //test creating over max num of files
-  char buffer[100];
-  for(int i = 0; i < FS_FILE_MAX_COUNT + 3; i++) {
-    sprintf(buffer, "test-max-create%d", i);
-    assert(fs_create(buffer) == 0);
-    if(i == FS_FILE_MAX_COUNT) {
-      assert(fs_create("test-out-bounds") == -1);
-      break;
-    }
-  }
+void thread_fs_rm(void *arg)
+{
+	struct thread_arg *t_arg = arg;
+	char *diskname, *filename;
 
-  for(int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
-    sprintf(buffer, "test-max-create%d", i);
-    assert(fs_open(buffer) == 0);
-    if(i == FS_OPEN_MAX_COUNT) {
-      assert(fs_open(buffer) == 1);
-      break;
-    }
-  }
-  for(int i = 0; i < FS_FILE_MAX_COUNT ; i++) {
-    close(i);
-  }
+	if (t_arg->argc < 2)
+		die("need <diskname> <filename>");
 
+	diskname = t_arg->argv[0];
+	filename = t_arg->argv[1];
+
+	if (fs_mount(diskname))
+		die("Cannot mount diskname");
+
+	if (fs_delete(filename)) {
+		fs_umount();
+		die("Cannot delete file");
+	}
+
+	if (fs_umount())
+		die("Cannot unmount diskname");
+
+	printf("Removed file '%s'\n", filename);
+}
+
+void thread_fs_add(void *arg)
+{
+	struct thread_arg *t_arg = arg;
+	char *diskname, *filename, *buf;
+	int fd, fs_fd;
+	struct stat st;
+	int written;
+
+	if (t_arg->argc < 2)
+		die("Usage: <diskname> <host filename>");
+
+	diskname = t_arg->argv[0];
+	filename = t_arg->argv[1];
+
+	/* Open file on host computer */
+	fd = open(filename, O_RDONLY);
+	if (fd < 0)
+		die_perror("open");
+	if (fstat(fd, &st))
+		die_perror("fstat");
+	if (!S_ISREG(st.st_mode))
+		die("Not a regular file: %s\n", filename);
+
+	/* Map file into buffer */
+	buf = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (!buf)
+		die_perror("mmap");
+
+	/* Now, deal with our filesystem:
+	 * - mount, create a new file, copy content of host file into this new
+	 *   file, close the new file, and umount
+	 */
+	if (fs_mount(diskname))
+		die("Cannot mount diskname");
+
+	if (fs_create(filename)) {
+		fs_umount();
+		die("Cannot create file");
+	}
+
+	fs_fd = fs_open(filename);
+	if (fs_fd < 0) {
+		fs_umount();
+		die("Cannot open file");
+	}
+
+
+	written = fs_write(fs_fd, buf, st.st_size);
+
+	if (fs_close(fs_fd)) {
+		fs_umount();
+		die("Cannot close file");
+	}
+
+	if (fs_umount())
+		die("Cannot unmount diskname");
+
+	printf("Wrote file '%s' (%d/%zu bytes)\n", filename, written,
+		   st.st_size);
+
+	munmap(buf, st.st_size);
+	close(fd);
+}
+
+void thread_fs_ls(void *arg)
+{
+	struct thread_arg *t_arg = arg;
+	char *diskname;
+
+	if (t_arg->argc < 1)
+		die("Usage: <diskname>");
+
+	diskname = t_arg->argv[0];
+
+	if (fs_mount(diskname))
+		die("Cannot mount diskname");
+
+	fs_ls();
+
+	if (fs_umount())
+		die("Cannot unmount diskname");
+}
+
+void thread_fs_info(void *arg)
+{
+	struct thread_arg *t_arg = arg;
+	char *diskname;
+
+	if (t_arg->argc < 1)
+		die("Usage: <diskname>");
+
+	diskname = t_arg->argv[0];
+
+	if (fs_mount(diskname))
+		die("Cannot mount diskname");
+
+	fs_info();
+
+	if (fs_umount())
+		die("Cannot unmount diskname");
+}
+
+size_t get_argv(char *argv)
+{
+	long int ret = strtol(argv, NULL, 0);
+	if (ret == LONG_MIN || ret == LONG_MAX)
+		die_perror("strtol");
+	return (size_t)ret;
+}
+
+static struct {
+	const char *name;
+	void(*func)(void *);
+} commands[] = {
+	{ "info",	thread_fs_info },
+	{ "ls",		thread_fs_ls },
+	{ "add",	thread_fs_add },
+	{ "rm",		thread_fs_rm },
+	{ "cat",	thread_fs_cat },
+	{ "stat",	thread_fs_stat }
+};
+
+void usage(char *program)
+{
+	size_t i;
+	fprintf(stderr, "Usage: %s <command> [<arg>]\n", program);
+	fprintf(stderr, "Possible commands are:\n");
+	for (i = 0; i < ARRAY_SIZE(commands); i++)
+		fprintf(stderr, "\t%s\n", commands[i].name);
+	exit(1);
 }
 
 int main(int argc, char **argv)
 {
-  if(argc < 2){
-    printf("Please input the diskname as a command line arg\n");
-    return -1;
-  }
-  char* diskname = argv[1];
-  assert(fs_mount(diskname) == 0);
+	size_t i;
+	char *program;
+	char *cmd;
+	struct thread_arg arg;
 
-  test_small_rw_operation();
-  test_oob_read();
-  test_open_and_create();
+	program = argv[0];
 
+	if (argc == 1)
+		usage(program);
 
+	/* Skip argv[0] */
+	argc--;
+	argv++;
 
-  fs_umount();
-  return 0;
+	cmd = argv[0];
+	arg.argc = --argc;
+	arg.argv = &argv[1];
+
+	for (i = 0; i < ARRAY_SIZE(commands); i++) {
+		if (!strcmp(cmd, commands[i].name)) {
+			commands[i].func(&arg);
+			break;
+		}
+	}
+	if (i == ARRAY_SIZE(commands)) {
+		test_fs_error("invalid command '%s'", cmd);
+		usage(program);
+	}
+
+	return 0;
 }

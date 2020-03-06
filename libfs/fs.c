@@ -340,7 +340,7 @@ uint16_t allocateNewFATBlock(int rootDirEntryIndex){
 
     FS->FAT[curFATBlockIndex] = availableIndex;
     FS->FAT[availableIndex] = FAT_EOC;
-    FS->superblock.numDataBlocks++;
+    //FS->superblock.numDataBlocks++;
     return availableIndex;
   }
   return FAT_EOC;
@@ -399,7 +399,7 @@ int fs_write(int fd, void *buf, size_t count)
     }
   }
 
-  if(fileDescriptorTable[fd].offset + count > BLOCK_SIZE*FS->superblock.numDataBlocks){
+  if(fileDescriptorTable[fd].offset + count >= BLOCK_SIZE*FS->superblock.numDataBlocks){
     return -1;
   }
 
@@ -492,7 +492,7 @@ int fs_read(int fd, void *buf, size_t count)
     }
   }
 
-  if(count - fileDescriptorTable[fd].offset > r.fileSize){
+  if(count + fileDescriptorTable[fd].offset > r.fileSize){
     return -1;
   }
 
