@@ -487,7 +487,7 @@ int fs_read(int fd, void *buf, size_t count)
     }
   }
 
-  if(count - fileDescriptorTable[fd].filename[offset] > r.fileSize){
+  if(count - fileDescriptorTable[fd].offset > r.fileSize){
     return -1;
   }
 
