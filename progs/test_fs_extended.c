@@ -50,8 +50,8 @@ void test_small_rw_operation(){
 	}
 	//Write to file 1, then read it in and check its contents. Then close and delete file 1
 	assert(fs_write(0, filledBlock, BLOCK_SIZE*2 + 2000));
-	void* file1ReadBuffer = malloc(BLOCK_SIZE);
-	assert(fs_read(0, file1ReadBuffer, BLOCK_SIZE*2 + 2000) == 0);
+	void* file1ReadBuffer = malloc(BLOCK_SIZE*2 + 2000);
+	assert(fs_read(0, file1ReadBuffer, BLOCK_SIZE*2 + 2000) == BLOCK_SIZE*2 + 2000);
 	assert(memcmp(file1ReadBuffer, filledBlock, BLOCK_SIZE*2 + 2000) == 0);
 	char* filledBlock2 = malloc (3000);
 	for(int i = 0; i < 3000; i++) {
