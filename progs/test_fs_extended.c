@@ -42,7 +42,7 @@ void test_small_rw_operation(){
 	//Test FAT first allocation
 	char* appendBlock = malloc(BLOCK_SIZE*2);
 	for(int i = 0; i < BLOCK_SIZE*2; i++) {
-	  appendBlock[i] = 1;
+	  appendBlock[i] = 3;
 	}
 	char* filledBlock = malloc(BLOCK_SIZE*2 + 2000);
 	for(int i = 0; i < BLOCK_SIZE*2 + 2000; i++) {
@@ -51,6 +51,7 @@ void test_small_rw_operation(){
 	//Write to file 1, then read it in and check its contents. Then close and delete file 1
 	assert(fs_write(0, filledBlock, BLOCK_SIZE*2 + 2000));
 	void* file1ReadBuffer = malloc(BLOCK_SIZE*2 + 2000);
+	assert(fs_lseek(0,0) == 0);
 	assert(fs_read(0, file1ReadBuffer, BLOCK_SIZE*2 + 2000) == BLOCK_SIZE*2 + 2000);
 	assert(memcmp(file1ReadBuffer, filledBlock, BLOCK_SIZE*2 + 2000) == 0);
 	char* filledBlock2 = malloc (3000);
@@ -65,10 +66,20 @@ void test_small_rw_operation(){
 	assert(fs_write(1, appendBlock, BLOCK_SIZE*2));
 	//Read to file 2 and check its contents
 	void* file2ReadBuffer1 = malloc(3000);
+	assert(fs_lseek(1, 0) == 0);
 	assert(fs_read(1, file2ReadBuffer1, 3000) == 3000);
-	assert(memcmp(file2ReadBuffer1, filledBlock2, 3000) == 3000);
+	assert(memcmp(file2ReadBuffer1, filledBlock2, 3000) == 0);
 	void* file2ReadBuffer2 = malloc(BLOCK_SIZE*2);
 	assert(fs_read(1, file2ReadBuffer2, BLOCK_SIZE*2) == BLOCK_SIZE*2);
+	int numDiff = 0;
+	int lastDiffPos = -1;
+	for(int i = 0; i<BLOCK_SIZE*2; i++){
+		if(((char*)file2ReadBuffer2)[i] != ((char*)filledBlock2)[i]){
+			lastDiffPos = i;
+			numDiff++;
+		}
+	}
+	printf("Num different = %d, first different position = %d", numDiff, lastDiffPos);
 	assert(memcmp(file2ReadBuffer2, filledBlock2, BLOCK_SIZE*2) == 0);
 	assert(FS->rootDir.rootDirEntries[1].firstDataBlockIndex == 4);
 	assert(FS->FAT[4] == 1);
